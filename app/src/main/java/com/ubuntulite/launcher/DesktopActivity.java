@@ -78,13 +78,9 @@ public final class DesktopActivity extends Activity {
         prootTmp.setExecutable(true, true);
         buildScreen();
 
-        if (new File(rootfs, "root/.ubuntu-lite-desktop-ready").isFile()
-                && new File(rootfs, "bin/bash").exists()) {
-            showBoot("Starting Ubuntu desktop", "Starting XFCE and the built-in desktop display…");
-            startDesktopSession();
-        } else {
-            showInstallScreen();
-        }
+        showBoot("Restoring preinstalled Ubuntu", "Unpacking the complete Ubuntu desktop already included in this APK. No package downloads are needed.");
+        appendLog("Ubuntu Desktop is bundled inside this APK; first launch only extracts it into app storage.");
+        startDesktopSession();
     }
 
     private int dp(float n) {
@@ -171,10 +167,10 @@ public final class DesktopActivity extends Activity {
         bootPanel.addView(bootStatus, statusLp);
 
         installButton = new Button(this);
-        installButton.setText("Install Ubuntu Desktop");
+        installButton.setText("Start Ubuntu Desktop");
         installButton.setAllCaps(false);
         installButton.setTextSize(16);
-        installButton.setOnClickListener(v -> installDesktop());
+        installButton.setOnClickListener(v -> startDesktopSession());
         LinearLayout.LayoutParams buttonLp = new LinearLayout.LayoutParams(-1, dp(54));
         buttonLp.topMargin = dp(22);
         bootPanel.addView(installButton, buttonLp);
@@ -216,9 +212,9 @@ public final class DesktopActivity extends Activity {
         installButton.setText("Install Ubuntu Desktop");
         retryButton.setVisibility(View.GONE);
         bootTitle.setText("Ubuntu Desktop");
-        bootStatus.setText("Ubuntu 22.04 LTS · ARM64 · XFCE · LibreOffice · Firefox");
-        appendLog("This APK runs an Ubuntu desktop session, not a simulated terminal launcher.");
-        appendLog("First setup downloads official Ubuntu packages; several GB of free storage are recommended.");
+        bootStatus.setText("Preinstalled Ubuntu 22.04 LTS · XFCE · Firefox · LibreOffice");
+        appendLog("Ubuntu desktop is preinstalled in the APK. No first-run package download is required.");
+        appendLog("First start unpacks the local image and may take several minutes; leave several GB of free storage.");
     }
 
     private void showBoot(String title, String status) {
@@ -230,35 +226,9 @@ public final class DesktopActivity extends Activity {
     }
 
     private void installDesktop() {
-        installButton.setEnabled(false);
-        installButton.setText("Installing Ubuntu…");
-        retryButton.setVisibility(View.GONE);
-        bootTitle.setText("Preparing Ubuntu");
-        bootStatus.setText("Installing XFCE, Firefox, LibreOffice and the package manager…");
-        worker.execute(() -> {
-            try {
-                installRootfsIfNeeded();
-                configureDns();
-                copyAssetToRootfs("ubuntu-desktop-setup.sh", "tmp/ubuntu-desktop-setup.sh");
-                int code = runFiniteScript("tmp/ubuntu-desktop-setup.sh");
-                if (code != 0 || !new File(rootfs, "root/.ubuntu-lite-desktop-ready").isFile()) {
-                    throw new IllegalStateException("Desktop setup did not complete (exit " + code + "). See the log for the first error.");
-                }
-                runOnUiThread(() -> {
-                    installButton.setText("Installed — starting desktop…");
-                    bootStatus.setText("Ubuntu desktop packages installed; starting XFCE…");
-                });
-                startDesktopSession();
-            } catch (Exception e) {
-                appendLog("SETUP FAILED: " + e.getMessage());
-                runOnUiThread(() -> {
-                    bootTitle.setText("Ubuntu setup failed");
-                    bootStatus.setText("Check the log above, fix the error, and retry.");
-                    installButton.setEnabled(true);
-                    installButton.setText("Retry Ubuntu setup");
-                });
-            }
-        });
+        // The full Ubuntu filesystem is bundled into the APK; there is no package
+        // bootstrap or app-download phase on first launch.
+        startDesktopSession();
     }
 
     private void startDesktopSession() {
@@ -275,6 +245,7 @@ public final class DesktopActivity extends Activity {
         });
         worker.execute(() -> {
             try {
+                installRootfsIfNeeded();
                 configureDns();
                 copyAssetToRootfs("ubuntu-desktop-start.sh", "tmp/ubuntu-desktop-start.sh");
                 Process p = launchScript("tmp/ubuntu-desktop-start.sh");
@@ -379,11 +350,14 @@ public final class DesktopActivity extends Activity {
     }
 
     private void installRootfsIfNeeded() throws Exception {
-        if (new File(rootfs, "bin/bash").exists() && new File(rootfs, "etc/apt/sources.list").exists()) {
-            appendLog("Using existing Ubuntu filesystem.");
+        File preinstalled = new File(rootfs, "root/.ubuntu-preinstalled-desktop-v1");
+        if (preinstalled.isFile() && new File(rootfs, "bin/bash").exists()
+                && new File(rootfs, "opt/firefox/firefox").exists()
+                && new File(rootfs, "usr/bin/soffice").exists()) {
+            appendLog("Using complete preinstalled Ubuntu desktop already unpacked on this device.");
             return;
         }
-        appendLog("Extracting official Ubuntu Base ARM64 filesystem…");
+        appendLog("Unpacking the preinstalled Ubuntu desktop from this APK. No network package download is required…");
         delete(rootfs);
         if (!rootfs.mkdirs()) throw new IllegalStateException("Cannot create Ubuntu root filesystem.");
         Path base = rootfs.toPath().toAbsolutePath().normalize();
@@ -402,14 +376,21 @@ public final class DesktopActivity extends Activity {
                     links.add(entry); linkPaths.add(target); continue;
                 }
                 if (entry.isDirectory()) {
-                    Files.createDirectories(target); target.toFile().setExecutable(true, false);
+                    Files.createDirectories(target);
+                    target.toFile().setReadable(true, false);
+                    target.toFile().setWritable(true, true);
+                    target.toFile().setExecutable(true, true);
                 } else if (entry.isFile()) {
                     Files.createDirectories(target.getParent());
                     try (FileOutputStream out = new FileOutputStream(target.toFile())) {
                         int n; while ((n = tar.read(buf)) != -1) out.write(buf, 0, n);
                     }
+                    // Every extracted inode belongs to the Android app UID. In this
+                    // private rootfs, owner-writable files allow dpkg to replace files
+                    // and create backups while PRoot emulates guest root.
                     target.toFile().setReadable(true, false);
-                    if ((entry.getMode() & 0111) != 0) target.toFile().setExecutable(true, false);
+                    target.toFile().setWritable(true, true);
+                    if ((entry.getMode() & 0111) != 0) target.toFile().setExecutable(true, true);
                 }
             }
         }
@@ -426,7 +407,13 @@ public final class DesktopActivity extends Activity {
                 }
             } catch (Exception ignored) {}
         }
-        appendLog("Ubuntu base extracted.");
+        if (!new File(rootfs, "root/.ubuntu-preinstalled-desktop-v1").isFile()
+                || !new File(rootfs, "opt/firefox/firefox").isFile()
+                || !new File(rootfs, "usr/bin/soffice").isFile()
+                || !new File(rootfs, "usr/sbin/synaptic").isFile()) {
+            throw new IllegalStateException("The bundled image is not a complete preinstalled Ubuntu desktop. This APK must be rebuilt.");
+        }
+        appendLog("Complete preinstalled Ubuntu desktop extracted locally.");
     }
 
     private void configureDns() throws Exception {
