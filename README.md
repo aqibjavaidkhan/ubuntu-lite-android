@@ -1,32 +1,35 @@
-# Ubuntu Desktop for Android (ARM64)
+# Preinstalled Ubuntu Desktop for Android (ARM64)
 
-This private project builds an Android APK that runs an Ubuntu 22.04 ARM64 userland in app-private storage using PRoot. The app opens a real Ubuntu XFCE desktop session inside the app (not a fake desktop launcher and not a terminal-only screen).
+This project builds an Android APK containing a **preinstalled Ubuntu 22.04 ARM64 desktop filesystem**. The APK includes the Ubuntu OS userland, XFCE, Mozilla Firefox, LibreOffice, Synaptic graphical package manager, desktop fonts and utilities, and the PRoot native runtime.
 
-## Desktop included
+## First launch — no package downloads
 
-On first launch, tap **Install Ubuntu Desktop**. The app downloads and installs these packages from the official Ubuntu Jammy ARM64 repositories:
+The GitHub Actions workflow creates the complete ARM64 root filesystem during the APK build, installs the desktop and software into that filesystem, compresses it, and embeds it in the APK. On the phone, the first launch only extracts that bundled filesystem into the app's private storage and starts the desktop session. It should not run `apt install`, fetch Firefox, or download the desktop packages during startup.
 
-- XFCE desktop and terminal
-- TigerVNC plus noVNC/websockify, rendered in the app's embedded WebView
+The extracted desktop uses XFCE displayed through a VNC/noVNC view embedded in the app. App/file system startup still requires free local storage. Allow several GB of free space for the expanded Ubuntu image. The APK itself is much larger than the earlier 27 MB base-only builds because it contains the installed software.
+
+## Included software
+
+- Ubuntu 22.04 LTS ARM64 userland from the official Ubuntu image
+- XFCE desktop and XFCE Terminal
+- Mozilla Firefox for Linux ARM64
 - LibreOffice
-- Synaptic graphical package manager for Ubuntu's .deb/apt repositories
-- fonts, GVFS and common desktop utilities
+- Synaptic graphical package manager
+- Ubuntu APT repositories configured with official components
 
-Firefox is downloaded from Mozilla's official Linux ARM64 release channel and registered in the Ubuntu application menu. Ubuntu's Jammy `firefox` apt package is a Snap transition package, so this build uses Mozilla's standalone Linux binary instead.
+Snap Store and snap packages are not included; they require snapd/system-service functionality that this unrooted PRoot runtime does not provide. Synaptic/apt can use Ubuntu .deb repositories, but application install/upgrade operations inside PRoot may still be affected by Android filesystem and PRoot limitations. The Android kernel and Android operating system are not replaced.
 
-The APK bundles Ubuntu Base and the PRoot runtime. The first setup downloads the desktop and office software, so use Wi-Fi and allow several GB of free storage. Reopen the APK after setup and it starts the Ubuntu desktop directly.
+## Build a preinstalled APK
 
-## Build
+1. Open the repository's **Actions** tab.
+2. Select **Build preinstalled Ubuntu Desktop APK**.
+3. Wait for the ARM64 image build and APK payload checks to finish.
+4. Download the artifact named **Ubuntu-Desktop-Preinstalled-ARM64-APK**. The artifact ZIP contains `app-debug.apk`.
 
-1. Open **Actions**.
-2. Select **Build standalone Ubuntu Lite APK**.
-3. Run the workflow on `main`, or wait for the push-triggered build.
-4. Download `Ubuntu-Lite-standalone-ARM64-APK`. The artifact ZIP contains `app-debug.apk`.
+The build verifies that the embedded compressed filesystem contains the preinstalled desktop marker, Firefox, LibreOffice, and Synaptic, and that the asset is well above the size of the old base-only rootfs.
 
-Minimum Android version: Android 11 (API 30), ARM64. The APK is debug-signed for personal installation. It is not a replacement OS image and does not modify Android.
+Minimum Android version: Android 11 (API 30), ARM64. The APK is debug-signed for personal sideloading; Play Protect may still show a generic warning for a sideloaded/debug build. The desktop has not been hardware-tested on every Android device.
 
-## App/package limitations
+## Reproducibility and notices
 
-The desktop runs unrooted on Android's existing kernel. Ubuntu's normal deb/apt package model is available via Synaptic and apt. Snap Store / snap packages and features requiring a running systemd/snapd service are not provided in this PRoot environment. The app has not been verified as a device OS port for the Samsung S24 Ultra; actual hardware testing on the phone remains necessary.
-
-See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for third-party notices.
+The image build uses official Ubuntu Jammy ARM64 packages and Mozilla's official Linux ARM64 Firefox download. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
