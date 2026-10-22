@@ -209,7 +209,7 @@ public final class DesktopActivity extends Activity {
         bootPanel.setVisibility(View.VISIBLE);
         installButton.setVisibility(View.VISIBLE);
         installButton.setEnabled(true);
-        installButton.setText("Install Ubuntu Desktop");
+        installButton.setText("Start Ubuntu Desktop");
         retryButton.setVisibility(View.GONE);
         bootTitle.setText("Ubuntu Desktop");
         bootStatus.setText("Preinstalled Ubuntu 22.04 LTS · XFCE · Firefox · LibreOffice");
@@ -226,8 +226,7 @@ public final class DesktopActivity extends Activity {
     }
 
     private void installDesktop() {
-        // The full Ubuntu filesystem is bundled into the APK; there is no package
-        // bootstrap or app-download phase on first launch.
+        // The complete Ubuntu desktop is bundled in the APK; no package bootstrap is needed.
         startDesktopSession();
     }
 
