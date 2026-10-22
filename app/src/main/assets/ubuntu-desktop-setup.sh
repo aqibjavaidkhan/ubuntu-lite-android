@@ -10,6 +10,10 @@ chmod 1777 /tmp /var/tmp
 for d in / /usr /usr/bin /usr/sbin /usr/lib /usr/share /etc /var /var/lib /var/lib/dpkg /var/cache /var/cache/apt /var/cache/apt/archives /var/lib/apt /var/lib/apt/lists /tmp /var/tmp /root /opt; do
   chmod u+rwx "$d" 2>/dev/null || true
 done
+# PRoot's fake root does not grant host filesystem ownership. dpkg needs the
+# APK's real UID to write backup links for binaries such as /usr/bin/perl.
+# Make guest system files owner-writable before package upgrades.
+chmod -R u+rwX /usr /etc /var /opt /root 2>/dev/null || true
 mkdir -p /var/lib/dpkg/updates /var/cache/apt/archives/partial /var/lib/apt/lists/partial
 chmod -R u+rwX /var/lib/dpkg /var/cache/apt /var/lib/apt/lists 2>/dev/null || true
 touch /var/lib/dpkg/status
