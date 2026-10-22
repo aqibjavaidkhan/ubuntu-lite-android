@@ -5,6 +5,14 @@ export DEBIAN_FRONTEND=noninteractive
 export TMPDIR=/tmp
 mkdir -p /tmp /var/tmp /run /root/.vnc /usr/local/bin /opt
 chmod 1777 /tmp /var/tmp
+# The APK process owns the extracted rootfs on Android. Ensure dpkg's state,
+# archive cache and system directories are writable by that real UID.
+for d in / /usr /usr/bin /usr/sbin /usr/lib /usr/share /etc /var /var/lib /var/lib/dpkg /var/cache /var/cache/apt /var/cache/apt/archives /var/lib/apt /var/lib/apt/lists /tmp /var/tmp /root /opt; do
+  chmod u+rwx "$d" 2>/dev/null || true
+done
+mkdir -p /var/lib/dpkg/updates /var/cache/apt/archives/partial /var/lib/apt/lists/partial
+chmod -R u+rwX /var/lib/dpkg /var/cache/apt /var/lib/apt/lists 2>/dev/null || true
+touch /var/lib/dpkg/status
 
 echo "Updating official Ubuntu package indexes..."
 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=40 update
