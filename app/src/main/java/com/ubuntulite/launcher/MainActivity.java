@@ -151,7 +151,7 @@ public final class MainActivity extends Activity {
         Path base = rootfs.toPath().toAbsolutePath().normalize();
         List<TarArchiveEntry> links = new ArrayList<>();
         List<Path> linkPaths = new ArrayList<>();
-        try (InputStream raw=getAssets().open("ubuntu-rootfs.tar.gz");
+        try (InputStream raw=getAssets().open("ubuntu-rootfs.dat");
              GZIPInputStream gz=new GZIPInputStream(raw);
              TarArchiveInputStream tar=new TarArchiveInputStream(gz)) {
             TarArchiveEntry e;
