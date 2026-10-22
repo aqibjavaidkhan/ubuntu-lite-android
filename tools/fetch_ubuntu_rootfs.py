@@ -4,7 +4,7 @@ from pathlib import Path
 
 BASE = "https://cdimages.ubuntu.com/ubuntu-base/releases/22.04/release"
 NAME = "ubuntu-base-22.04.5-base-arm64.tar.gz"
-DEST = Path("app/src/main/assets/ubuntu-rootfs.tar.gz")
+DEST = Path("app/src/main/assets/ubuntu-rootfs.dat")
 
 def get(url):
     req=urllib.request.Request(url,headers={"User-Agent":"UbuntuLite-Android-build/0.2"})
