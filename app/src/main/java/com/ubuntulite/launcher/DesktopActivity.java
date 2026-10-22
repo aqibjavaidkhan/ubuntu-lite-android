@@ -184,7 +184,7 @@ public final class DesktopActivity extends Activity {
         retryLp.topMargin = dp(8);
         bootPanel.addView(retryButton, retryLp);
 
-        TextView details = label("A real Ubuntu XFCE desktop with Firefox, LibreOffice and a graphical Ubuntu package manager. First setup downloads desktop packages from Ubuntu and Mozilla; allow several GB of free storage and use Wi-Fi.", 13, MUTED);
+        TextView details = label("Ubuntu XFCE, Firefox, LibreOffice and Synaptic are preinstalled inside this APK. No package downloads are required on first launch; the app only unpacks the included desktop image, so keep several GB of free storage.", 13, MUTED);
         details.setGravity(Gravity.TOP);
         LinearLayout.LayoutParams detailsLp = new LinearLayout.LayoutParams(-1, -2);
         detailsLp.topMargin = dp(14);
