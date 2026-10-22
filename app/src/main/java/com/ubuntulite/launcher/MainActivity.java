@@ -359,17 +359,30 @@ public final class MainActivity extends Activity {
         worker.execute(() -> {
             try {
                 installRootfs(); configureDns();
+                File runtimeTmp = new File(getCacheDir(), "proot-tmp");
+                if (!runtimeTmp.exists() && !runtimeTmp.mkdirs()) throw new IllegalStateException("Cannot create PRoot temp directory");
+                runtimeTmp.setWritable(true, true);
+                File ubuntuTmp = new File(rootfs, "tmp");
+                if (!ubuntuTmp.exists() && !ubuntuTmp.mkdirs()) throw new IllegalStateException("Cannot create Ubuntu /tmp");
+                ubuntuTmp.setReadable(true, false); ubuntuTmp.setWritable(true, false); ubuntuTmp.setExecutable(true, false);
+                File ubuntuVarTmp = new File(rootfs, "var/tmp");
+                if (!ubuntuVarTmp.exists() && !ubuntuVarTmp.mkdirs()) throw new IllegalStateException("Cannot create Ubuntu /var/tmp");
+                ubuntuVarTmp.setReadable(true, false); ubuntuVarTmp.setWritable(true, false); ubuntuVarTmp.setExecutable(true, false);
                 File libs = new File(getApplicationInfo().nativeLibraryDir);
                 File proot = new File(libs, "libproot.so");
                 File loader = new File(libs, "libproot-loader.so");
                 if (!proot.canExecute() || !loader.isFile()) throw new IllegalStateException("Bundled PRoot runtime missing");
                 List<String> cmd = new ArrayList<>(); cmd.add(proot.getAbsolutePath());
                 String[] args = {"-r", rootfs.getAbsolutePath(), "-w", "/root", "-0", "-b", "/dev", "-b", "/proc", "-b", "/sys",
-                    "/usr/bin/env", "-i", "HOME=/root", "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-                    "TERM=xterm-256color", "/bin/bash", "--noprofile", "--norc", "-i"};
+                    "-b", runtimeTmp.getAbsolutePath() + ":/tmp", "/usr/bin/env", "-i", "HOME=/root",
+                    "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                    "TMPDIR=/tmp", "TMP=/tmp", "TEMP=/tmp", "TERM=xterm-256color",
+                    "PS1=ubuntu-lite# ", "/bin/bash", "--noprofile", "--norc"};
                 java.util.Collections.addAll(cmd, args);
                 ProcessBuilder pb = new ProcessBuilder(cmd).redirectErrorStream(true);
                 pb.environment().put("PROOT_LOADER", loader.getAbsolutePath());
+                pb.environment().put("PROOT_TMP_DIR", runtimeTmp.getAbsolutePath());
+                pb.environment().put("TMPDIR", runtimeTmp.getAbsolutePath());
                 pb.environment().put("LD_LIBRARY_PATH", libs.getAbsolutePath());
                 shell = pb.start(); writer = new BufferedWriter(new OutputStreamWriter(shell.getOutputStream()));
                 BufferedReader reader = new BufferedReader(new InputStreamReader(shell.getInputStream()));
