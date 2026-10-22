@@ -115,6 +115,7 @@ public final class MainActivity extends Activity {
         worker.execute(() -> {
             try {
                 installRootfs();
+                configureDns();
                 File libs = new File(getApplicationInfo().nativeLibraryDir);
                 File proot = new File(libs, "libproot.so");
                 File loader = new File(libs, "libproot-loader.so");
@@ -186,6 +187,20 @@ public final class MainActivity extends Activity {
         }
         new File(rootfs, ".installed").createNewFile();
         line("Ubuntu filesystem installed.");
+    }
+
+    private void configureDns() throws Exception {
+        File etc = new File(rootfs, "etc");
+        if (!etc.exists() && !etc.mkdirs()) throw new IllegalStateException("Cannot create Ubuntu /etc directory");
+        File resolv = new File(etc, "resolv.conf");
+        if (Files.isSymbolicLink(resolv.toPath()) || resolv.exists()) Files.deleteIfExists(resolv.toPath());
+        try (java.io.FileWriter fw = new java.io.FileWriter(resolv, false)) {
+            fw.write("# DNS configured by Ubuntu Lite for Android\\n");
+            fw.write("nameserver 1.1.1.1\\n");
+            fw.write("nameserver 8.8.8.8\\n");
+            fw.write("options timeout:2 attempts:3\\n");
+        }
+        line("Configured Ubuntu DNS resolver.");
     }
 
     private void send() {
