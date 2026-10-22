@@ -38,32 +38,68 @@ jobs:
         with:
           platforms: arm64
 
+      - name: Restore preinstalled Ubuntu desktop rootfs cache
+        id: restore-rootfs
+        uses: actions/cache/restore@v4
+        with:
+          path: app/src/main/assets/ubuntu-rootfs.dat
+          key: ubuntu-preinstalled-rootfs-v2-${{ hashFiles('tools/ubuntu-desktop/Dockerfile') }}
+
+      - name: Download and unpack Firefox on native CI host
+        if: steps.restore-rootfs.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tools/ubuntu-desktop/prebuilt
+          curl --fail --location --retry 4 --retry-delay 2 --connect-timeout 20             "https://download.mozilla.org/?product=firefox-latest-ssl&os=linux64-aarch64&lang=en-US"             --output /tmp/firefox-archive.tar.bz2
+          tar -xf /tmp/firefox-archive.tar.bz2 -C tools/ubuntu-desktop/prebuilt
+          test -x tools/ubuntu-desktop/prebuilt/firefox/firefox
+          rm -f /tmp/firefox-archive.tar.bz2
+          echo "Firefox ARM64 extracted on native runner; Docker will only copy files."
+
       - name: Build fully provisioned Ubuntu Desktop filesystem
+        id: build-rootfs
+        if: steps.restore-rootfs.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
           docker build --platform linux/arm64 -f tools/ubuntu-desktop/Dockerfile -t ubuntu-lite-preinstalled:22.04 .
           cid="$(docker create --platform linux/arm64 ubuntu-lite-preinstalled:22.04)"
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true; rm -rf tools/ubuntu-desktop/prebuilt' EXIT
           mkdir -p app/src/main/assets
-          echo "Disk space before rootfs export:"
-          df -h
-          docker export "$cid" -o /tmp/ubuntu-rootfs.tar
-          test -s /tmp/ubuntu-rootfs.tar
-          echo "Uncompressed rootfs export:"
-          ls -lh /tmp/ubuntu-rootfs.tar
-          gzip -1 -c /tmp/ubuntu-rootfs.tar > app/src/main/assets/ubuntu-rootfs.dat
-          rm -f /tmp/ubuntu-rootfs.tar
+          docker export "$cid" | gzip -1 > app/src/main/assets/ubuntu-rootfs.dat
           docker rm "$cid"
+          rm -rf tools/ubuntu-desktop/prebuilt
           test -s app/src/main/assets/ubuntu-rootfs.dat
-          echo "Bundled rootfs size:"
+          echo "Preinstalled Ubuntu filesystem size:"
           ls -lh app/src/main/assets/ubuntu-rootfs.dat
-          df -h
-          tar -tzf app/src/main/assets/ubuntu-rootfs.dat > /tmp/ubuntu-rootfs-files.txt
-          grep -q 'root/.ubuntu-preinstalled-desktop-v1' /tmp/ubuntu-rootfs-files.txt
-          grep -q 'opt/firefox/firefox' /tmp/ubuntu-rootfs-files.txt
-          grep -q 'usr/bin/soffice' /tmp/ubuntu-rootfs-files.txt
-          grep -q 'usr/sbin/synaptic' /tmp/ubuntu-rootfs-files.txt
-          echo "Confirmed: preinstalled rootfs includes Firefox, LibreOffice, Synaptic and desktop marker."
+
+      - name: Verify preinstalled Ubuntu desktop contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOTFS=app/src/main/assets/ubuntu-rootfs.dat
+          test -s "$ROOTFS"
+          tar -tzf "$ROOTFS" | awk '
+            /root\/.ubuntu-preinstalled-desktop-v1$/ { marker=1 }
+            /opt\/firefox\/firefox$/ { firefox=1 }
+            /usr\/bin\/soffice$/ { office=1 }
+            /usr\/sbin\/synaptic$/ { synaptic=1 }
+            END {
+              if (!marker || !firefox || !office || !synaptic) {
+                print "Missing preinstalled Ubuntu desktop file(s): marker=" marker ", firefox=" firefox ", libreoffice=" office ", synaptic=" synaptic > "/dev/stderr"
+                exit 1
+              }
+              print "Verified complete Ubuntu desktop: marker, Firefox ARM64, LibreOffice and Synaptic present."
+            }
+          '
+
+      - name: Save preinstalled Ubuntu desktop rootfs cache
+        if: steps.restore-rootfs.outputs.cache-hit != 'true' && steps.build-rootfs.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: app/src/main/assets/ubuntu-rootfs.dat
+          key: ubuntu-preinstalled-rootfs-v2-${{ hashFiles('tools/ubuntu-desktop/Dockerfile') }}
 
       - name: Bundle ARM64 PRoot runtime
         run: python3 tools/fetch_native_runtime.py
@@ -97,8 +133,8 @@ jobs:
           APK=app/build/outputs/apk/debug/app-debug.apk
           test -s "$APK"
           ls -lh "$APK"
-          unzip -l "$APK" | grep 'assets/ubuntu-rootfs.dat'
-          unzip -l "$APK" | grep -E 'assets/ubuntu-desktop-start.sh'
+          unzip -Z1 "$APK" | grep -Fx 'assets/ubuntu-rootfs.dat'
+          unzip -Z1 "$APK" | grep -Fx 'assets/ubuntu-desktop-start.sh'
           unzip -Z1 "$APK" | grep -E '^lib/arm64-v8a/libproot(-loader)?\.so$'
           rootfs_bytes="$(unzip -l "$APK" | awk '$4=="assets/ubuntu-rootfs.dat" {print $1}')"
           echo "Preinstalled rootfs compressed size in APK: $rootfs_bytes bytes"
