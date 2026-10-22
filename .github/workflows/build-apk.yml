@@ -1,0 +1,52 @@
+name: Build standalone Ubuntu Lite APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-arm64-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Install native tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binutils patchelf dpkg-dev xz-utils
+      - name: Download and verify Ubuntu ARM64 root filesystem
+        run: python3 tools/fetch_ubuntu_rootfs.py
+      - name: Bundle PRoot runtime and dependencies
+        run: python3 tools/fetch_native_runtime.py
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android platform and build tools
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Build debug APK
+        run: gradle --no-daemon --stacktrace assembleDebug
+      - name: Verify APK
+        run: |
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          ls -lh app/build/outputs/apk/debug/app-debug.apk
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -E 'lib/arm64-v8a/lib(proot|talloc|android-shmem).*\.so|ubuntu-rootfs\.tar\.gz'
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ubuntu-Lite-standalone-ARM64-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
