@@ -40,7 +40,9 @@ jobs:
       - name: Install Android platform and build tools
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - name: Assert Android 11+ target
-        run: grep -q 'minSdk 30' app/build.gradle
+        run: |
+          grep -q 'minSdk 30' app/build.gradle
+          grep -q 'targetSdk 35' app/build.gradle
       - name: Reuse debug signing key for installable updates
         uses: actions/cache@v4
         with:
