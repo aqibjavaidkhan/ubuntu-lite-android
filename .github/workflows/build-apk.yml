@@ -39,13 +39,18 @@ jobs:
           packages: 'platform-tools'
       - name: Install Android platform and build tools
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Assert Android 11+ target
+        run: grep -q 'minSdk 30' app/build.gradle
       - name: Build debug APK
         run: gradle --no-daemon --stacktrace assembleDebug
-      - name: Verify APK
+      - name: Verify APK payload
         run: |
-          test -s app/build/outputs/apk/debug/app-debug.apk
-          ls -lh app/build/outputs/apk/debug/app-debug.apk
-          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -E 'lib/arm64-v8a/lib(proot|talloc|android-shmem).*\.so|ubuntu-rootfs\.dat'
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          ls -lh "$APK"
+          unzip -l "$APK" | grep -E 'lib/arm64-v8a/lib(proot|talloc|android-shmem).*\.so|ubuntu-rootfs\.dat'
+          unzip -l "$APK" | grep 'assets/ubuntu-desktop-setup.sh'
+          unzip -l "$APK" | grep 'assets/ubuntu-desktop-start.sh'
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
