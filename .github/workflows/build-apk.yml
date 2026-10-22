@@ -41,6 +41,11 @@ jobs:
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - name: Assert Android 11+ target
         run: grep -q 'minSdk 30' app/build.gradle
+      - name: Reuse debug signing key for installable updates
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: ubuntu-lite-desktop-debug-keystore-v1
       - name: Build debug APK
         run: gradle --no-daemon --stacktrace assembleDebug
       - name: Verify APK payload
