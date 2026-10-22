@@ -1,15 +1,22 @@
-Ubuntu desktop runtime
-======================
+Ubuntu Desktop — preinstalled in the APK
+=========================================
 
-The APK carries Ubuntu Base ARM64. On first setup it obtains XFCE, TigerVNC,
-noVNC/websockify, LibreOffice and Synaptic from the official Ubuntu Jammy ARM64
-repositories. Firefox is downloaded from Mozilla's official Linux ARM64 channel.
-The downloaded packages remain in the Android app-private Ubuntu rootfs.
+The APK embeds an Ubuntu 22.04 ARM64 root filesystem that already contains:
+- XFCE desktop and XFCE Terminal
+- TigerVNC plus noVNC/websockify for the embedded display
+- LibreOffice
+- Synaptic package manager and Ubuntu APT repository indexes
+- Mozilla Firefox's official Linux ARM64 binary
+- desktop fonts, icons, and utilities
 
-The desktop is a genuine Ubuntu XFCE session rendered in the APK through noVNC.
-The package manager is Synaptic against Ubuntu .deb repositories. Snap Store and
-snap packages are not included: they rely on snapd/system services unavailable in
-this unrooted PRoot environment. The phone's Android OS remains installed and
-unchanged.
+The first launch extracts this bundled image to Android app-private storage and
+starts XFCE. It does not download the desktop packages on the phone. Keep several
+GB of free local storage available for extraction and use.
 
-First setup needs an internet connection and multiple gigabytes of free storage.
+The Ubuntu userland runs through PRoot on Android's existing kernel. Snap/snapd
+isn't included because this unrooted environment does not run Ubuntu's usual
+system services. Synaptic/apt can use Ubuntu .deb repositories; package mutations
+may remain limited by the no-root PRoot filesystem model.
+
+Ubuntu, XFCE, Firefox, LibreOffice, and their dependencies retain their respective
+upstream licenses. See the repository's THIRD_PARTY_NOTICES.md.
