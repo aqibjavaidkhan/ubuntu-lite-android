@@ -7,6 +7,17 @@ ENV DEBIAN_FRONTEND=noninteractive \
     HOME=/root \
     PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
+# Enable all official Ubuntu Jammy components before installing desktop applications.
+RUN set -eux; \
+    if [ -f /etc/apt/sources.list ]; then \
+      sed -i -E '/^[[:space:]]*deb / { / universe/! s/$/ universe/; / multiverse/! s/$/ multiverse/; }' /etc/apt/sources.list; \
+    fi; \
+    for f in /etc/apt/sources.list.d/*.sources; do \
+      if [ -f "$f" ]; then \
+        sed -i -E '/^Components:/ { /universe/! s/$/ universe/; /multiverse/! s/$/ multiverse/; }' "$f"; \
+      fi; \
+    done
+
 # Prevent package post-install scripts from trying to start system services.
 RUN printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d && chmod 755 /usr/sbin/policy-rc.d
 
