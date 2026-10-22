@@ -43,11 +43,19 @@ jobs:
           docker build --platform linux/arm64 -f tools/ubuntu-desktop/Dockerfile -t ubuntu-lite-preinstalled:22.04 .
           cid="$(docker create --platform linux/arm64 ubuntu-lite-preinstalled:22.04)"
           mkdir -p app/src/main/assets
-          docker export "$cid" | gzip -1 > app/src/main/assets/ubuntu-rootfs.dat
+          echo "Disk space before rootfs export:"
+          df -h
+          docker export "$cid" -o /tmp/ubuntu-rootfs.tar
+          test -s /tmp/ubuntu-rootfs.tar
+          echo "Uncompressed rootfs export:"
+          ls -lh /tmp/ubuntu-rootfs.tar
+          gzip -1 -c /tmp/ubuntu-rootfs.tar > app/src/main/assets/ubuntu-rootfs.dat
+          rm -f /tmp/ubuntu-rootfs.tar
           docker rm "$cid"
           test -s app/src/main/assets/ubuntu-rootfs.dat
           echo "Bundled rootfs size:"
           ls -lh app/src/main/assets/ubuntu-rootfs.dat
+          df -h
           tar -tzf app/src/main/assets/ubuntu-rootfs.dat > /tmp/ubuntu-rootfs-files.txt
           grep -q 'root/.ubuntu-preinstalled-desktop-v1' /tmp/ubuntu-rootfs-files.txt
           grep -q 'opt/firefox/firefox' /tmp/ubuntu-rootfs-files.txt
