@@ -48,10 +48,11 @@ jobs:
           test -s app/src/main/assets/ubuntu-rootfs.dat
           echo "Bundled rootfs size:"
           ls -lh app/src/main/assets/ubuntu-rootfs.dat
-          tar -tzf app/src/main/assets/ubuntu-rootfs.dat | grep -q 'root/.ubuntu-preinstalled-desktop-v1'
-          tar -tzf app/src/main/assets/ubuntu-rootfs.dat | grep -q 'opt/firefox/firefox'
-          tar -tzf app/src/main/assets/ubuntu-rootfs.dat | grep -q 'usr/bin/soffice'
-          tar -tzf app/src/main/assets/ubuntu-rootfs.dat | grep -q 'usr/sbin/synaptic'
+          tar -tzf app/src/main/assets/ubuntu-rootfs.dat > /tmp/ubuntu-rootfs-files.txt
+          grep -q 'root/.ubuntu-preinstalled-desktop-v1' /tmp/ubuntu-rootfs-files.txt
+          grep -q 'opt/firefox/firefox' /tmp/ubuntu-rootfs-files.txt
+          grep -q 'usr/bin/soffice' /tmp/ubuntu-rootfs-files.txt
+          grep -q 'usr/sbin/synaptic' /tmp/ubuntu-rootfs-files.txt
           echo "Confirmed: preinstalled rootfs includes Firefox, LibreOffice, Synaptic and desktop marker."
 
       - name: Bundle ARM64 PRoot runtime
