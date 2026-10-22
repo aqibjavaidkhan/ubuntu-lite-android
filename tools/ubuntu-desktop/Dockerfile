@@ -37,16 +37,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && mkdir -p /run /tmp /var/tmp /root/.vnc /root/.config/xfce4/xfconf/xfce-perchannel-xml /usr/local/bin \
     && chmod 1777 /tmp /var/tmp
 
-# Install Mozilla's official Linux ARM64 Firefox binary into the prebuilt filesystem.
+# Firefox's ARM64 archive is unpacked on the native x86 CI runner before docker build.
+# COPY avoids slow tar extraction under QEMU's ARM64 emulation.
+COPY tools/ubuntu-desktop/prebuilt/firefox /opt/firefox
 RUN set -eux; \
-    curl --fail --location --retry 4 --retry-delay 2 --connect-timeout 20 \
-      "https://download.mozilla.org/?product=firefox-latest-ssl&os=linux64-aarch64&lang=en-US" \
-      --output /tmp/firefox-archive; \
-    mkdir -p /opt; \
-    tar -xf /tmp/firefox-archive -C /opt; \
     test -x /opt/firefox/firefox; \
     ln -sfn /opt/firefox/firefox /usr/local/bin/firefox; \
-    rm -f /tmp/firefox-archive; \
     mkdir -p /usr/local/share/applications /usr/share/applications
 
 RUN cat > /usr/share/applications/ubuntu-software-manager.desktop <<'DESKTOP'
