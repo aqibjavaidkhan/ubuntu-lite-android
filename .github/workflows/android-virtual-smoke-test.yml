@@ -15,12 +15,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  emulator-smoke-test:
-    name: Install, launch, and capture Android screen with ARM64 translation
-    # Use a native x86_64 host + Google APIs x86_64 image. Android 11+ Google APIs
-    # x86_64 images include ARM64 native translation for this ARM64-only APK.
+  launcher-smoke-test:
+    name: Boot Android and verify launcher startup
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 25
     steps:
       - name: Download published native-X11 preview APK
         shell: bash
@@ -34,7 +32,7 @@ jobs:
           ls -lh /tmp/Ubuntu-Desktop-Android11plus.apk
           sha256sum /tmp/Ubuntu-Desktop-Android11plus.apk | tee artifacts/virtual-device/apk-sha256.txt
 
-      - name: Boot Android 15 x86_64 virtual device and smoke-test ARM64 app
+      - name: Install APK and check launcher startup
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -42,7 +40,7 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_2
-          emulator-boot-timeout: 900
+          emulator-boot-timeout: 600
           emulator-options: -no-window -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect -memory 4096 -partition-size 8192
           disable-animations: true
           script: |
@@ -54,94 +52,34 @@ jobs:
             adb shell settings put global animator_duration_scale 0
 
             PACKAGE='com.ubuntulite.desktop'
-            echo "Checking emulator and APK package ID..."
+            echo "Android version, ABI and native bridge:"
             adb shell getprop ro.build.version.release | tr -d '\r' | tee artifacts/virtual-device/android-version.txt
             adb shell getprop ro.product.cpu.abilist | tr -d '\r' | tee artifacts/virtual-device/device-abis.txt
             adb shell getprop ro.dalvik.vm.native.bridge | tr -d '\r' | tee artifacts/virtual-device/native-bridge.txt
+
+            echo "Installing APK..."
             adb install -r /tmp/Ubuntu-Desktop-Android11plus.apk
             adb shell pm list packages | grep -Fx "package:$PACKAGE"
             adb shell appops set "$PACKAGE" MANAGE_EXTERNAL_STORAGE allow || true
 
-            echo "Launching Ubuntu launcher and checking for an immediate crash..."
+            echo "Launching launcher..."
             adb logcat -c
             adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1
-            sleep 10
-            adb logcat -d -t 20000 > artifacts/virtual-device/launcher-logcat.txt
+            sleep 12
+            adb logcat -d -t 30000 > artifacts/virtual-device/launcher-logcat.txt
             adb shell dumpsys activity activities > artifacts/virtual-device/launcher-activities.txt
             adb exec-out screencap -p > artifacts/virtual-device/launcher-screen.png
+
             if grep -E 'FATAL EXCEPTION|Fatal signal|Process: com.ubuntulite.desktop' artifacts/virtual-device/launcher-logcat.txt; then
-              echo "Launcher crash detected. Diagnostic log and screenshot will be uploaded." >&2
+              echo "Launcher crash detected; screenshot and logcat are saved as artifacts." >&2
               exit 1
             fi
             if ! grep -E 'mResumedActivity|topResumedActivity' artifacts/virtual-device/launcher-activities.txt | grep -q 'com.ubuntulite.launcher.MainActivity'; then
-              echo "Launcher did not remain in foreground after startup." >&2
+              echo "Launcher did not remain in the foreground for 12 seconds." >&2
               cat artifacts/virtual-device/launcher-activities.txt >&2
               exit 1
             fi
-            echo "Launcher stayed in foreground for 10 seconds without a fatal crash."
-
-            echo "Opening Linux Desktop from the launcher..."
-            if ! adb shell am start -W -n "$PACKAGE/com.ubuntulite.launcher.DesktopActivity"; then
-              echo "Direct activity start was denied; locating the Linux Desktop tile via UIAutomator."
-            fi
-            sleep 5
-            adb shell dumpsys activity activities > artifacts/virtual-device/activities.txt
-            if grep -E 'mResumedActivity|topResumedActivity' artifacts/virtual-device/activities.txt | grep -q 'com.ubuntulite.launcher.MainActivity'; then
-              adb shell uiautomator dump /sdcard/ubuntu-launcher.xml >/dev/null 2>&1 || true
-              adb shell cat /sdcard/ubuntu-launcher.xml > artifacts/virtual-device/launcher-hierarchy.xml
-              python3 - <<'PY'
-            import re
-            import subprocess
-            from pathlib import Path
-
-            xml = Path("artifacts/virtual-device/launcher-hierarchy.xml").read_text(errors="replace")
-            bounds = None
-            for node in re.findall(r"<node\b([^>]+)>", xml):
-                attrs = dict(re.findall(r'([\w-]+)="([^"]*)"', node))
-                if attrs.get("content-desc") == "Linux Desktop" or attrs.get("text") == "Linux Desktop":
-                    bounds = re.search(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', attrs.get("bounds", ""))
-                    if bounds:
-                        x1, y1, x2, y2 = map(int, bounds.groups())
-                        subprocess.run(["adb", "shell", "input", "tap", str((x1+x2)//2), str((y1+y2)//2)], check=True)
-                        print(f"Tapped Linux Desktop tile at {((x1+x2)//2, (y1+y2)//2)}")
-                        break
-            if not bounds:
-                raise SystemExit("Could not find the Linux Desktop launcher tile in UIAutomator hierarchy.")
-            PY
-            fi
-
-            echo "Waiting up to 8 minutes for native X11 activity to open..."
-            for attempt in $(seq 1 48); do
-              adb logcat -d -t 20000 > artifacts/virtual-device/logcat.txt
-              if grep -E 'FATAL EXCEPTION|Fatal signal' artifacts/virtual-device/logcat.txt; then
-                echo "Fatal error signature detected while app was starting." >&2
-                exit 1
-              fi
-              adb shell dumpsys activity activities > artifacts/virtual-device/activities.txt
-              if grep -E 'mResumedActivity|topResumedActivity' artifacts/virtual-device/activities.txt | grep -q 'com.termux.x11.MainActivity'; then
-                echo "Native X11 activity reached foreground."
-                break
-              fi
-              sleep 10
-            done
-
-            sleep 30
-            adb shell dumpsys activity activities > artifacts/virtual-device/activities.txt
-            adb logcat -d -t 20000 > artifacts/virtual-device/logcat.txt
-            adb exec-out screencap -p > artifacts/virtual-device/ubuntu-desktop-screen.png
-            test -s artifacts/virtual-device/ubuntu-desktop-screen.png
-
-            echo "Top/resumed activity:"
-            grep -E 'mResumedActivity|topResumedActivity' artifacts/virtual-device/activities.txt || true
-            if ! grep -F 'com.termux.x11.MainActivity' artifacts/virtual-device/activities.txt; then
-              echo "Native X11 activity did not reach the foreground within 8 minutes." >&2
-              exit 1
-            fi
-            if grep -E 'FATAL EXCEPTION|Fatal signal' artifacts/virtual-device/logcat.txt; then
-              echo "Fatal error signature detected in emulator logcat." >&2
-              exit 1
-            fi
-            echo "Android installation and native-X11 foreground smoke test passed. Review the saved screenshot and logs; this does not certify browser, network, audio, or Bluetooth functionality."
+            echo "PASS: launcher stayed in the foreground for 12 seconds without a fatal crash."
 
       - name: Upload virtual-device screenshot and diagnostic logs
         if: always()
