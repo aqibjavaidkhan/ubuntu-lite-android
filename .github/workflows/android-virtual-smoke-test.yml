@@ -62,9 +62,23 @@ jobs:
             adb shell pm list packages | grep -Fx "package:$PACKAGE"
             adb shell appops set "$PACKAGE" MANAGE_EXTERNAL_STORAGE allow || true
 
-            echo "Launching Ubuntu launcher..."
+            echo "Launching Ubuntu launcher and checking for an immediate crash..."
+            adb logcat -c
             adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1
-            sleep 3
+            sleep 10
+            adb logcat -d -t 20000 > artifacts/virtual-device/launcher-logcat.txt
+            adb shell dumpsys activity activities > artifacts/virtual-device/launcher-activities.txt
+            adb exec-out screencap -p > artifacts/virtual-device/launcher-screen.png
+            if grep -E 'FATAL EXCEPTION|Fatal signal|Process: com.ubuntulite.desktop' artifacts/virtual-device/launcher-logcat.txt; then
+              echo "Launcher crash detected. Diagnostic log and screenshot will be uploaded." >&2
+              exit 1
+            fi
+            if ! grep -E 'mResumedActivity|topResumedActivity' artifacts/virtual-device/launcher-activities.txt | grep -q 'com.ubuntulite.launcher.MainActivity'; then
+              echo "Launcher did not remain in foreground after startup." >&2
+              cat artifacts/virtual-device/launcher-activities.txt >&2
+              exit 1
+            fi
+            echo "Launcher stayed in foreground for 10 seconds without a fatal crash."
 
             echo "Opening Linux Desktop from the launcher..."
             if ! adb shell am start -W -n "$PACKAGE/com.ubuntulite.launcher.DesktopActivity"; then
