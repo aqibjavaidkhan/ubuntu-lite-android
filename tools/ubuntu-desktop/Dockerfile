@@ -55,7 +55,7 @@ export USER=ubuntu
 export LOGNAME=ubuntu
 unset DBUS_SESSION_BUS_ADDRESS
 cd /home/ubuntu || exit 1
-exec su -s /bin/bash ubuntu -c 'export HOME=/home/ubuntu USER=ubuntu LOGNAME=ubuntu; cd /home/ubuntu; exec /usr/bin/firefox "$@"' ubuntu-firefox "$@"
+exec su -s /bin/bash -c 'export HOME=/home/ubuntu USER=ubuntu LOGNAME=ubuntu; cd /home/ubuntu; exec /usr/bin/firefox "$@"' ubuntu ubuntu-firefox "$@"
 SCRIPT
 RUN chmod 755 /usr/local/bin/ubuntu-firefox
 
