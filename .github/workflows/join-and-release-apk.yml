@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   join-and-release:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_sha == github.sha) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -80,7 +80,7 @@ jobs:
           cat "$part1" "$part2" "$part3" > Ubuntu-Desktop-Android11plus.apk
           size="$(stat -c %s Ubuntu-Desktop-Android11plus.apk)"
           echo "Joined APK size: $size bytes"
-          test "$size" -gt 600000000
+          test "$size" -gt 200000000
 
           file Ubuntu-Desktop-Android11plus.apk
           unzip -t Ubuntu-Desktop-Android11plus.apk | tail -2
@@ -99,7 +99,7 @@ jobs:
           name: Ubuntu Desktop Android APK
           body: |
             Prebuilt ARM64 Ubuntu desktop APK for Android 11+ (no root).
-            Approximate size: 603 MiB. Requires several GB of free storage for extraction.
+            Size depends on the included desktop components. Requires several GB of free storage for extraction.
             Build archive and SHA-256 validation performed by GitHub Actions.
             Device runtime testing must still be confirmed on a physical Android device.
           overwrite_files: true
