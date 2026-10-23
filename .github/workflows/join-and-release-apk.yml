@@ -1,0 +1,42 @@
+name: Join and Release APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  join-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts from workflow run
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 39875528873
+          name: Ubuntu-Desktop-APK-Part-*
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Concatenate APK parts
+        run: |
+          ls -la Ubuntu-Desktop-APK-Part-*
+          cat Ubuntu-Desktop-APK-Part-1 Ubuntu-Desktop-APK-Part-2 Ubuntu-Desktop-APK-Part-3 > Ubuntu-Desktop-Android11plus.apk
+
+      - name: Verify APK size
+        run: |
+          size=$(stat -c %s Ubuntu-Desktop-Android11plus.apk)
+          echo "APK size: $size bytes"
+          if [ "$size" -le 600000000 ]; then
+            echo "APK size is below 600000000 bytes!"
+            exit 1
+          fi
+
+      - name: Verify APK integrity
+        run: unzip -t Ubuntu-Desktop-Android11plus.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ubuntu-desktop-apk-v1
+          files: Ubuntu-Desktop-Android11plus.apk
