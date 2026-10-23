@@ -210,3 +210,71 @@ jobs:
             /tmp/ubuntu-apk-parts/Ubuntu-Desktop-Android11plus.apk.sha256
           if-no-files-found: error
           retention-days: 14
+
+
+  publish-native-x11-preview:
+    if: github.ref == 'refs/heads/native-x11-display'
+    needs: build-arm64-apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Checkout the built commit
+        uses: actions/checkout@v4
+        with:
+          ref: \${{ github.sha }}
+
+      - name: Download split APK parts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: Ubuntu-Desktop-APK-Part-*
+          path: /tmp/ubuntu-apk-parts
+          merge-multiple: true
+
+      - name: Download APK checksums
+        uses: actions/download-artifact@v4
+        with:
+          name: Ubuntu-Desktop-APK-Checksums
+          path: /tmp/ubuntu-apk-parts/checksums
+
+      - name: Join and verify installable APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/ubuntu-apk-parts
+          sha256sum -c checksums/SHA256SUMS.parts
+          cat ubuntu-desktop-00.part ubuntu-desktop-01.part ubuntu-desktop-02.part > Ubuntu-Desktop-Android11plus.apk
+          sha256sum -c checksums/Ubuntu-Desktop-Android11plus.apk.sha256
+          unzip -tq Ubuntu-Desktop-Android11plus.apk
+          test -s Ubuntu-Desktop-Android11plus.apk
+          ls -lh Ubuntu-Desktop-Android11plus.apk
+
+      - name: Publish preview release without touching stable release
+        env:
+          GH_TOKEN: \${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest_sha="$(git ls-remote origin refs/heads/native-x11-display | cut -f1)"
+          if [[ "$latest_sha" != "$GITHUB_SHA" ]]; then
+            echo "Skipping stale build $GITHUB_SHA; branch now points to $latest_sha."
+            exit 0
+          fi
+          short_sha="\${GITHUB_SHA:0:7}"
+          tag="ubuntu-desktop-native-x11-$short_sha"
+          asset="/tmp/ubuntu-apk-parts/Ubuntu-Desktop-Android11plus.apk"
+          notes="$(cat <<'NOTES'
+          Experimental native X11 Ubuntu desktop preview for Android phones and tablets.
+
+          This is a pre-release build. It keeps the stable APK release untouched.
+          Native display compilation and APK package checks passed in CI; real-device startup, touch and browser behavior still need testing on the target phone/tablet.
+          NOTES
+          )"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "$asset" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$tag" "$asset" --title "Ubuntu Desktop Native X11 Preview ($short_sha)" --notes "$notes" --prerelease --target "$GITHUB_SHA" --repo "$GITHUB_REPOSITORY"
+          fi
+          echo "Preview release: https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/Ubuntu-Desktop-Android11plus.apk"
