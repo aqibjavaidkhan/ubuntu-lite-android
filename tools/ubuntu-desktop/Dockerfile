@@ -126,7 +126,7 @@ Categories=Utility;TextEditor;
 DESKTOP
 
 RUN for item in ubuntu-files ubuntu-terminal ubuntu-editor ubuntu-software-manager; do \
-      printf '[PlankDockItemPreferences]\\nLauncher=file:///usr/share/applications/%s.desktop\\n' "$item" \
+      printf '[PlankDockItemPreferences]\nLauncher=file:///usr/share/applications/%s.desktop\n' "$item" \
         > "/root/.config/plank/dock1/launchers/$item.dockitem"; \
     done
 RUN cat > /root/.config/autostart/ubuntu-lite-dock.desktop <<'DESKTOP'
