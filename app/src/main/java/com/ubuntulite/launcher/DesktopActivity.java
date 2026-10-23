@@ -184,7 +184,7 @@ public final class DesktopActivity extends Activity {
         retryLp.topMargin = dp(8);
         bootPanel.addView(retryButton, retryLp);
 
-        TextView details = label("Ubuntu desktop, Firefox and LibreOffice are included in the app. First launch prepares the included files; later launches can start directly into the desktop.", 13, MUTED);
+        TextView details = label("Lightweight Ubuntu XFCE desktop. Firefox and LibreOffice are temporarily excluded until startup is stable; install them later through Ubuntu package tools.", 13, MUTED);
         details.setGravity(Gravity.TOP);
         LinearLayout.LayoutParams detailsLp = new LinearLayout.LayoutParams(-1, -2);
         detailsLp.topMargin = dp(14);
@@ -218,6 +218,14 @@ public final class DesktopActivity extends Activity {
         appendLog("First start unpacks the local image and may take several minutes; leave several GB of free storage.");
     }
 
+    private void updateBootProgress(String status) {
+        runOnUiThread(() -> {
+            bootPanel.setVisibility(View.VISIBLE);
+            bootTitle.setText("Starting Ubuntu desktop");
+            bootStatus.setText(status);
+        });
+    }
+
     private void showBoot(String title, String status) {
         runOnUiThread(() -> {
             bootPanel.setVisibility(View.VISIBLE);
@@ -241,13 +249,16 @@ public final class DesktopActivity extends Activity {
             installButton.setVisibility(View.GONE);
             retryButton.setVisibility(View.GONE);
             bootTitle.setText("Starting Ubuntu desktop");
-            bootStatus.setText("Starting XFCE and its private display…");
+            bootStatus.setText("Step 1/3: Preparing the included Ubuntu files…");
         });
         worker.execute(() -> {
             try {
+                updateBootProgress("Step 1/3: Preparing Ubuntu files…");
                 installRootfsIfNeeded();
+                updateBootProgress("Step 2/3: Configuring the desktop…");
                 configureDns();
                 copyAssetToRootfs("ubuntu-desktop-start.sh", "tmp/ubuntu-desktop-start.sh");
+                updateBootProgress("Step 3/3: Starting XFCE and connecting the display…");
                 Process p = launchScript("tmp/ubuntu-desktop-start.sh");
                 desktopProcess = p;
                 Thread reader = new Thread(() -> readLog(p), "ubuntu-desktop-log");
@@ -352,8 +363,7 @@ public final class DesktopActivity extends Activity {
     private void installRootfsIfNeeded() throws Exception {
         File preinstalled = new File(rootfs, "root/.ubuntu-preinstalled-desktop-v1");
         if (preinstalled.isFile() && new File(rootfs, "bin/bash").exists()
-                && new File(rootfs, "opt/firefox/firefox").exists()
-                && new File(rootfs, "usr/bin/soffice").exists()) {
+                && new File(rootfs, "usr/sbin/synaptic").exists()) {
             appendLog("Using complete preinstalled Ubuntu desktop already unpacked on this device.");
             return;
         }
@@ -408,8 +418,6 @@ public final class DesktopActivity extends Activity {
             } catch (Exception ignored) {}
         }
         if (!new File(rootfs, "root/.ubuntu-preinstalled-desktop-v1").isFile()
-                || !new File(rootfs, "opt/firefox/firefox").isFile()
-                || !new File(rootfs, "usr/bin/soffice").isFile()
                 || !new File(rootfs, "usr/sbin/synaptic").isFile()) {
             throw new IllegalStateException("The bundled image is not a complete preinstalled Ubuntu desktop. This APK must be rebuilt.");
         }
