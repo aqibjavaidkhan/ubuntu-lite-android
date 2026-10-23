@@ -52,21 +52,7 @@ jobs:
           path: app/src/main/assets/ubuntu-rootfs.dat
           key: ubuntu-preinstalled-rootfs-v2-${{ hashFiles('tools/ubuntu-desktop/Dockerfile') }}
 
-      - name: Download and unpack Firefox on native CI host
-        if: steps.restore-rootfs.outputs.cache-hit != 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p tools/ubuntu-desktop/prebuilt
-          curl --fail --location --retry 4 --retry-delay 2 --connect-timeout 20 \
-            "https://download.mozilla.org/?product=firefox-latest-ssl&os=linux64-aarch64&lang=en-US" \
-            --output /tmp/firefox-archive.tar.bz2
-          tar -xf /tmp/firefox-archive.tar.bz2 -C tools/ubuntu-desktop/prebuilt
-          test -x tools/ubuntu-desktop/prebuilt/firefox/firefox
-          rm -f /tmp/firefox-archive.tar.bz2
-          echo "Firefox ARM64 extracted on native runner; Docker will only copy files."
-
-      - name: Build fully provisioned Ubuntu Desktop filesystem
+      - name: Build lightweight Ubuntu Desktop filesystem
         id: build-rootfs
         if: steps.restore-rootfs.outputs.cache-hit != 'true'
         shell: bash
@@ -74,11 +60,10 @@ jobs:
           set -euo pipefail
           docker build --platform linux/arm64 -f tools/ubuntu-desktop/Dockerfile -t ubuntu-lite-preinstalled:22.04 .
           cid="$(docker create --platform linux/arm64 ubuntu-lite-preinstalled:22.04)"
-          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true; rm -rf tools/ubuntu-desktop/prebuilt' EXIT
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
           mkdir -p app/src/main/assets
           docker export "$cid" | gzip -1 > app/src/main/assets/ubuntu-rootfs.dat
           docker rm "$cid"
-          rm -rf tools/ubuntu-desktop/prebuilt
           test -s app/src/main/assets/ubuntu-rootfs.dat
           echo "Preinstalled Ubuntu filesystem size:"
           ls -lh app/src/main/assets/ubuntu-rootfs.dat
