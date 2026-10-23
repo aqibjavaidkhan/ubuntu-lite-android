@@ -13,7 +13,7 @@ chmod 700 "$XDG_RUNTIME_DIR"
 echo "Waiting for the native Android X11 display on :0..."
 x_ready=0
 for attempt in $(seq 1 60); do
-  if xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then
+  if xset -q >/dev/null 2>&1; then
     x_ready=1
     break
   fi
@@ -50,4 +50,24 @@ for attempt in $(seq 1 60); do
   fi
   sleep 1
 done
+# Upgrade existing installs without deleting home files: install Firefox from
+# Mozilla's signed ARM64 repository and clean obsolete VNC packages after XFCE starts.
+if ! command -v firefox >/dev/null 2>&1 && [ ! -e /root/.ubuntu-lite-browser-migration.lock ]; then
+  touch /root/.ubuntu-lite-browser-migration.lock
+  (
+    trap 'rm -f /root/.ubuntu-lite-browser-migration.lock' EXIT
+    export DEBIAN_FRONTEND=noninteractive
+    set +e
+    apt-get update
+    apt-get install -y --no-install-recommends ca-certificates curl gnupg
+    mkdir -p /etc/apt/keyrings /etc/apt/preferences.d
+    curl -fsSL https://packages.mozilla.org/apt/repo-signing-key.gpg | gpg --dearmor -o /etc/apt/keyrings/packages.mozilla.org.gpg
+    if [ -s /etc/apt/keyrings/packages.mozilla.org.gpg ]; then
+      printf 'Types: deb\nURIs: https://packages.mozilla.org/apt\nSuites: mozilla\nComponents: main\nArchitectures: arm64\nSigned-By: /etc/apt/keyrings/packages.mozilla.org.gpg\n' > /etc/apt/sources.list.d/mozilla.sources
+      printf 'Package: *\nPin: origin packages.mozilla.org\nPin-Priority: 1000\n\nPackage: firefox*\nPin: release o=Ubuntu\nPin-Priority: -1\n' > /etc/apt/preferences.d/mozilla
+      apt-get update && apt-get install -y --no-install-recommends firefox
+    fi
+    apt-get purge -y --auto-remove tigervnc-standalone-server tigervnc-common novnc websockify
+  ) > /root/.ubuntu-lite-browser-migration.log 2>&1 &
+fi
 wait "$xfce_pid"
