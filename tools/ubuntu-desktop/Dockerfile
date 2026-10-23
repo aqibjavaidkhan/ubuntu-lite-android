@@ -30,7 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       fonts-dejavu-core fonts-noto-core fonts-noto-color-emoji fonts-liberation2 \
       xdg-utils desktop-file-utils gvfs gvfs-backends \
       x11-xserver-utils locales sudo \
-      adwaita-icon-theme hicolor-icon-theme gsettings-desktop-schemas \
+      adwaita-icon-theme hicolor-icon-theme gsettings-desktop-schemas librsvg2-common \
       psmisc procps iproute2 iputils-ping net-tools \
     && locale-gen en_US.UTF-8 \
     && mkdir -p /run /tmp /var/tmp /root/.vnc /root/.config/xfce4/xfconf/xfce-perchannel-xml /usr/local/bin \
@@ -80,6 +80,44 @@ RUN cat > /root/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml <<'XM
  </property>
 </channel>
 XML
+
+RUN cat > /root/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xsettings" version="1.0">
+ <property name="Net" type="empty">
+  <property name="ThemeName" type="string" value="Adwaita-dark"/>
+  <property name="IconThemeName" type="string" value="Adwaita"/>
+ </property>
+ <property name="Gtk" type="empty">
+  <property name="FontName" type="string" value="Noto Sans 10"/>
+ </property>
+</channel>
+XML
+
+RUN cat > /usr/local/bin/ubuntu-lite-desktop-init.sh <<'SCRIPT'
+#!/bin/bash
+# Apply visual preferences after XFCE and xfconf have started; never block desktop startup.
+sleep 3
+WALL=/usr/share/backgrounds/ubuntu-lite/garuda-inspired.svg
+for monitor in $(xrandr --query 2>/dev/null | awk '/ connected/{print $1}'); do
+  for screen in screen0; do
+    xfconf-query -c xfce4-desktop -p "/backdrop/$screen/monitor$monitor/workspace0/last-image" --create -t string -s "$WALL" >/dev/null 2>&1 || true
+    xfconf-query -c xfce4-desktop -p "/backdrop/$screen/monitor$monitor/workspace0/image-style" --create -t int -s 5 >/dev/null 2>&1 || true
+  done
+done
+xfconf-query -c xsettings -p /Net/ThemeName --create -t string -s "Adwaita-dark" >/dev/null 2>&1 || true
+xfconf-query -c xfce4-panel -p /panels/panel-1/position --create -t string -s "p=6;x=0;y=0" >/dev/null 2>&1 || true
+SCRIPT
+RUN chmod 755 /usr/local/bin/ubuntu-lite-desktop-init.sh
+RUN cat > /root/.config/autostart/ubuntu-lite-theme.desktop <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=Ubuntu Lite Desktop Theme
+Comment=Apply the dark mountain desktop theme
+Exec=/usr/local/bin/ubuntu-lite-desktop-init.sh
+OnlyShowIn=XFCE;
+X-GNOME-Autostart-enabled=true
+DESKTOP
 
 RUN cat > /usr/share/applications/ubuntu-software-manager.desktop <<'DESKTOP'
 [Desktop Entry]
