@@ -23,6 +23,12 @@ on:
 permissions:
   contents: read
 
+# Superseded experimental builds are expensive (ARM64 desktop image + NDK).
+# Keep only the newest build for this branch/ref.
+concurrency:
+  group: ubuntu-native-x11-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-arm64-apk:
     runs-on: ubuntu-latest
