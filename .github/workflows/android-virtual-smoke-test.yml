@@ -18,7 +18,7 @@ jobs:
   launcher-smoke-test:
     name: Boot Android and verify launcher startup
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 15
     steps:
       - name: Download published native-X11 preview APK
         shell: bash
@@ -40,7 +40,7 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_2
-          emulator-boot-timeout: 600
+          emulator-boot-timeout: 300
           emulator-options: -no-window -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect -memory 4096 -partition-size 8192
           disable-animations: true
           script: |
