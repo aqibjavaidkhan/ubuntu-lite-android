@@ -241,6 +241,11 @@ public final class DesktopActivity extends Activity {
             bootPanel.setVisibility(View.VISIBLE);
             bootTitle.setText(title);
             bootStatus.setText(status);
+            if (title.toLowerCase(java.util.Locale.ROOT).contains("error")) {
+                bootProgress.setVisibility(View.GONE);
+                logScroll.setVisibility(View.VISIBLE);
+                retryButton.setVisibility(View.VISIBLE);
+            }
         });
     }
 
@@ -279,7 +284,7 @@ public final class DesktopActivity extends Activity {
                 appendLog("DESKTOP START FAILED: " + e.getMessage());
                 runOnUiThread(() -> {
                     bootTitle.setText("Ubuntu desktop did not start");
-                    bootStatus.setText("Startup error: " + (e.getMessage() == null ? "Unknown error" : e.getMessage()) + "\\nSee diagnostic details below, then retry.");
+                    bootStatus.setText("Startup error: " + (e.getMessage() == null ? "Unknown error" : e.getMessage()) + "\nSee diagnostic details below, then retry.");
                     bootProgress.setVisibility(View.GONE);
                     logScroll.setVisibility(View.VISIBLE);
                     retryButton.setVisibility(View.VISIBLE);
@@ -340,9 +345,8 @@ public final class DesktopActivity extends Activity {
                     bootStatus.setText("The desktop process stopped before the display was ready. Diagnostic output is shown below.");
                     bootProgress.setVisibility(View.GONE);
                     logScroll.setVisibility(View.VISIBLE);
-                    installButton.setVisibility(View.VISIBLE);
-                    installButton.setText("Retry setup");
-                    installButton.setEnabled(true);
+                    installButton.setVisibility(View.GONE);
+                    retryButton.setText("Restart Ubuntu Desktop");
                     retryButton.setVisibility(View.VISIBLE);
                 });
                 return;
@@ -492,6 +496,9 @@ public final class DesktopActivity extends Activity {
             logBuffer.append(line == null ? "" : line).append('\n');
             if (logBuffer.length() > 14000) logBuffer.delete(0, logBuffer.length() - 10000);
             if (bootLog != null) bootLog.setText(logBuffer.toString());
+            if (logScroll != null && logScroll.getVisibility() == View.VISIBLE) {
+                logScroll.post(() -> logScroll.fullScroll(View.FOCUS_DOWN));
+            }
         });
     }
 
