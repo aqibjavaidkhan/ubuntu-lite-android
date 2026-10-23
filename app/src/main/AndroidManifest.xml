@@ -12,7 +12,7 @@
         </activity>
         <activity android:name=".DesktopActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <!-- Native X11 renderer is launched explicitly by DesktopActivity. -->
-        <activity android:name="com.termux.x11.MainActivity" android:exported="false">
+        <activity android:name="com.termux.x11.MainActivity" android:exported="false" tools:replace="android:exported">
             <intent-filter tools:node="remove">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
