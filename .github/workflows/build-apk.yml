@@ -9,6 +9,7 @@ on:
       - 'app/src/main/AndroidManifest.xml'
       - 'app/src/main/res/**'
       - 'app/src/main/assets/ubuntu-desktop-start.sh'
+      - 'tools/ubuntu-desktop/Dockerfile'
       - '.github/workflows/build-apk.yml'
 
 permissions:
@@ -94,11 +95,11 @@ jobs:
             /usr\/bin\/soffice$/ { office=1 }
             /usr\/sbin\/synaptic$/ { synaptic=1 }
             END {
-              if (!marker || !firefox || !office || !synaptic) {
-                print "Missing preinstalled Ubuntu desktop file(s): marker=" marker ", firefox=" firefox ", libreoffice=" office ", synaptic=" synaptic > "/dev/stderr"
+              if (!marker || !synaptic) {
+                print "Missing preinstalled Ubuntu desktop file(s): marker=" marker ", synaptic=" synaptic > "/dev/stderr"
                 exit 1
               }
-              print "Verified complete Ubuntu desktop: marker, Firefox ARM64, LibreOffice and Synaptic present."
+              print "Verified lightweight Ubuntu desktop: marker and Synaptic present; Firefox and LibreOffice intentionally excluded."
             }
           '
 
