@@ -347,6 +347,7 @@ public final class DesktopActivity extends Activity {
         pb.environment().put("UBUNTU_LITE_NATIVE_LIBRARY_DIR", getApplicationInfo().nativeLibraryDir);
         pb.environment().put("LD_LIBRARY_PATH", getApplicationInfo().nativeLibraryDir);
         pb.environment().put("TMPDIR", x11Tmp.getAbsolutePath());
+        pb.environment().put("XKB_CONFIG_ROOT", new File(rootfs, "usr/share/X11/xkb").getAbsolutePath());
         pb.environment().put("HOME", getFilesDir().getAbsolutePath());
         return pb.start();
     }
