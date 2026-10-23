@@ -15,7 +15,7 @@ chmod 1777 /tmp /tmp/.X11-unix
 if ! id ubuntu >/dev/null 2>&1 && command -v useradd >/dev/null 2>&1; then
   useradd --create-home --shell /bin/bash ubuntu || true
 fi
-if [ -x /usr/bin/firefox ] && command -v su >/dev/null 2>&1 && id ubuntu >/dev/null 2>&1; then
+if command -v su >/dev/null 2>&1 && id ubuntu >/dev/null 2>&1; then
   cat > /usr/local/bin/ubuntu-firefox <<'FIREFOX'
 #!/bin/sh
 export HOME=/home/ubuntu
@@ -26,9 +26,21 @@ cd /home/ubuntu || exit 1
 exec su -s /bin/bash -c 'export HOME=/home/ubuntu USER=ubuntu LOGNAME=ubuntu; cd /home/ubuntu; exec /usr/bin/firefox "$@"' ubuntu ubuntu-firefox "$@"
 FIREFOX
   chmod 755 /usr/local/bin/ubuntu-firefox
+  cat > /usr/share/applications/ubuntu-browser.desktop <<'DESKTOP'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Firefox Browser
+Exec=ubuntu-firefox
+Icon=firefox
+Terminal=false
+Categories=Network;WebBrowser;
+DESKTOP
   for launch in /usr/share/applications/ubuntu-browser.desktop /usr/share/applications/firefox.desktop; do
-    if [ -f "$launch" ]; then sed -i 's|^Exec=firefox$|Exec=ubuntu-firefox|' "$launch"; fi
+    if [ -f "$launch" ]; then sed -i 's|^Exec=firefox\b|Exec=ubuntu-firefox|' "$launch"; fi
   done
+  mkdir -p /root/.config/plank/dock1/launchers
+  printf '[PlankDockItemPreferences]\nLauncher=file:///usr/share/applications/ubuntu-browser.desktop\n' > /root/.config/plank/dock1/launchers/ubuntu-browser.dockitem
 fi
 
 echo "Waiting for the native Android X11 display on :0..."
