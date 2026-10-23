@@ -62,8 +62,40 @@ jobs:
             adb shell pm list packages | grep -Fx "package:$PACKAGE"
             adb shell appops set "$PACKAGE" MANAGE_EXTERNAL_STORAGE allow || true
 
-            echo "Launching Ubuntu Desktop..."
+            echo "Launching Ubuntu launcher..."
             adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1
+            sleep 3
+
+            echo "Opening Linux Desktop from the launcher..."
+            if ! adb shell am start -W -n "$PACKAGE/com.ubuntulite.launcher.DesktopActivity"; then
+              echo "Direct activity start was denied; locating the Linux Desktop tile via UIAutomator."
+            fi
+            sleep 5
+            adb shell dumpsys activity activities > artifacts/virtual-device/activities.txt
+            if ! grep -E 'mResumedActivity|topResumedActivity' artifacts/virtual-device/activities.txt | grep -q 'com.termux.x11.MainActivity'; then
+              adb shell uiautomator dump /sdcard/ubuntu-launcher.xml >/dev/null 2>&1 || true
+              adb shell cat /sdcard/ubuntu-launcher.xml > artifacts/virtual-device/launcher-hierarchy.xml
+              python3 - <<'PY'
+            import re
+            import subprocess
+            from pathlib import Path
+
+            xml = Path("artifacts/virtual-device/launcher-hierarchy.xml").read_text(errors="replace")
+            bounds = None
+            for node in re.findall(r"<node\\b([^>]+)>", xml):
+                attrs = dict(re.findall(r'([\\w-]+)="([^"]*)"', node))
+                if attrs.get("content-desc") == "Linux Desktop" or attrs.get("text") == "Linux Desktop":
+                    bounds = re.search(r'\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]', attrs.get("bounds", ""))
+                    if bounds:
+                        x1, y1, x2, y2 = map(int, bounds.groups())
+                        subprocess.run(["adb", "shell", "input", "tap", str((x1+x2)//2), str((y1+y2)//2)], check=True)
+                        print(f"Tapped Linux Desktop tile at {((x1+x2)//2, (y1+y2)//2)}")
+                        break
+            if not bounds:
+                raise SystemExit("Could not find the Linux Desktop launcher tile in UIAutomator hierarchy.")
+            PY
+            fi
+
             echo "Waiting up to 8 minutes for native X11 activity to open..."
             for attempt in $(seq 1 48); do
               adb logcat -d -t 20000 > artifacts/virtual-device/logcat.txt
