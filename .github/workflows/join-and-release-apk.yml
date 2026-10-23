@@ -67,7 +67,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          find parts -type f -printf '%p %s bytes\\n'
+          find parts -type f -printf '%p %s bytes\n'
 
           part1="$(find parts/one -type f -name '*.part' -print -quit)"
           part2="$(find parts/two -type f -name '*.part' -print -quit)"
@@ -88,7 +88,7 @@ jobs:
           unzip -t Ubuntu-Desktop-Android11plus.apk | tail -2
           unzip -Z1 Ubuntu-Desktop-Android11plus.apk | grep -Fx 'assets/ubuntu-rootfs.dat'
           unzip -Z1 Ubuntu-Desktop-Android11plus.apk | grep -Fx 'assets/ubuntu-desktop-start.sh'
-          unzip -Z1 Ubuntu-Desktop-Android11plus.apk | grep -E '^lib/arm64-v8a/libproot(-loader)?\\.so$'
+          unzip -Z1 Ubuntu-Desktop-Android11plus.apk | grep -E '^lib/arm64-v8a/libproot(-loader)?\.so$'
 
           sha256sum --check "$checksum_file"
           echo "APK archive, bundled Ubuntu rootfs, startup script, native runtime and SHA-256 all verified."
