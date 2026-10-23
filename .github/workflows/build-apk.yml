@@ -75,13 +75,13 @@ jobs:
           ROOTFS=app/src/main/assets/ubuntu-rootfs.dat
           test -s "$ROOTFS"
           tar -tzf "$ROOTFS" | awk '
-            /root\\/.ubuntu-preinstalled-desktop-v1$/ { marker=1 }
-            /usr\\/sbin\\/synaptic$/ { synaptic=1 }
-            /usr\\/bin\\/plank$/ { plank=1 }
-            /usr\\/share\\/backgrounds\\/ubuntu-lite\\/garuda-inspired\\.svg$/ { wallpaper=1 }
-            /usr\\/local\\/bin\\/ubuntu-lite-desktop-init\\.sh$/ { theme_init=1 }
-            /opt\\/firefox\\/firefox$/ { firefox=1 }
-            /usr\\/bin\\/soffice$/ { office=1 }
+            index($0, "root/.ubuntu-preinstalled-desktop-v1") { marker=1 }
+            index($0, "usr/sbin/synaptic") { synaptic=1 }
+            index($0, "usr/bin/plank") { plank=1 }
+            index($0, "usr/share/backgrounds/ubuntu-lite/garuda-inspired.svg") { wallpaper=1 }
+            index($0, "usr/local/bin/ubuntu-lite-desktop-init.sh") { theme_init=1 }
+            index($0, "opt/firefox/firefox") { firefox=1 }
+            index($0, "usr/bin/soffice") { office=1 }
             END {
               if (!marker || !synaptic || !plank || !wallpaper || !theme_init || firefox || office) {
                 print "Rootfs verification failed: marker=" marker ", synaptic=" synaptic ", plank=" plank ", wallpaper=" wallpaper ", theme_init=" theme_init ", firefox=" firefox ", libreoffice=" office > "/dev/stderr"
