@@ -17,9 +17,9 @@ concurrency:
 jobs:
   emulator-smoke-test:
     name: Install, launch, and capture ARM64 Android screen
-    # macos-15 is an Apple Silicon (ARM64) hosted runner, so the ARM64 AVD
+    # macos-latest is the current Apple Silicon (ARM64) hosted runner, so the ARM64 AVD
     # and the app's arm64-v8a native libraries use the same CPU architecture.
-    runs-on: macos-15
+    runs-on: macos-latest
     timeout-minutes: 40
     steps:
       - name: Download published native-X11 preview APK
