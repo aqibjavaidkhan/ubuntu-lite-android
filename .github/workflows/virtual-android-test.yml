@@ -1,0 +1,109 @@
+name: Ubuntu Lite Android virtual test
+run-name: Android emulator smoke test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  emulator-smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;29.0.14206865" "cmake;3.22.1"
+
+      - name: Install Gradle
+        run: |
+          curl -fsSL https://services.gradle.org/distributions/gradle-9.8.2-all.zip -o /tmp/gradle.zip
+          sudo unzip -q /tmp/gradle.zip -d /opt
+          echo "/opt/gradle-9.8.2/bin" >> "$GITHUB_PATH"
+
+      - name: Prepare pinned native X11 renderer
+        run: python3 tools/prepare_native_x11.py
+
+      - name: Bundle ARM64 PRoot runtime
+        run: python3 tools/fetch_native_runtime.py
+
+      - name: Build debug APK
+        run: gradle --no-daemon --stacktrace assembleDebug
+
+      - name: Verify APK package and native ARM64 libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          unzip -tq "$APK"
+          unzip -Z1 "$APK" | grep -Fx 'assets/ubuntu-rootfs.dat'
+          unzip -Z1 "$APK" | grep -Fx 'assets/ubuntu-desktop-start.sh'
+          unzip -Z1 "$APK" | grep -Fx 'lib/arm64-v8a/libXlorie.so'
+          unzip -Z1 "$APK" | grep -Fx 'lib/arm64-v8a/libproot.so'
+          echo "APK archive and required native files passed checks."
+
+      - name: Upload APK for optional device testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ubuntu-Lite-virtual-test-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  android-emulator:
+    # ARM64 native libraries require an ARM64 Android system image.
+    # GitHub-hosted runners may not provide usable ARM64 hardware acceleration;
+    # this job records that limitation rather than pretending an emulator ran.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Java and Android SDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+
+      - name: Check whether hosted runner exposes KVM
+        id: kvm
+        shell: bash
+        run: |
+          if [[ -e /dev/kvm && -r /dev/kvm && -w /dev/kvm ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "KVM is available."
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "KVM is unavailable; ARM64 emulator launch is not reliable on this runner."
+          fi
+
+      - name: Explain emulator prerequisite
+        if: steps.kvm.outputs.available != 'true'
+        run: |
+          echo "::notice::ARM64 Android emulator was not launched because this runner has no accessible KVM. Package/build checks still run in the other job; use a KVM-capable ARM64 emulator or a physical Android device for runtime validation."
+
+      - name: Report runtime test status
+        if: always()
+        run: |
+          echo "This job does not claim app launch, X11 rendering, Wi-Fi, Bluetooth, audio, vibration, or touch has been tested unless an ARM64 emulator is actually available."
