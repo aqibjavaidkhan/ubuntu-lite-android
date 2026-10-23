@@ -10,6 +10,26 @@ export XKB_CONFIG_ROOT=/usr/share/X11/xkb
 mkdir -p "$XDG_RUNTIME_DIR"
 chmod 700 "$XDG_RUNTIME_DIR"
 
+# Existing installations also need an unprivileged Firefox user/launcher.
+if ! id ubuntu >/dev/null 2>&1 && command -v useradd >/dev/null 2>&1; then
+  useradd --create-home --shell /bin/bash ubuntu || true
+fi
+if [ -x /usr/bin/firefox ] && command -v su >/dev/null 2>&1 && id ubuntu >/dev/null 2>&1; then
+  cat > /usr/local/bin/ubuntu-firefox <<'FIREFOX'
+#!/bin/sh
+export HOME=/home/ubuntu
+export USER=ubuntu
+export LOGNAME=ubuntu
+unset DBUS_SESSION_BUS_ADDRESS
+cd /home/ubuntu || exit 1
+exec su -s /bin/bash ubuntu -c 'export HOME=/home/ubuntu USER=ubuntu LOGNAME=ubuntu; cd /home/ubuntu; exec /usr/bin/firefox "$@"' ubuntu-firefox "$@"
+FIREFOX
+  chmod 755 /usr/local/bin/ubuntu-firefox
+  for launch in /usr/share/applications/ubuntu-browser.desktop /usr/share/applications/firefox.desktop; do
+    if [ -f "$launch" ]; then sed -i 's|^Exec=firefox$|Exec=ubuntu-firefox|' "$launch"; fi
+  done
+fi
+
 echo "Waiting for the native Android X11 display on :0..."
 x_ready=0
 for attempt in $(seq 1 60); do
