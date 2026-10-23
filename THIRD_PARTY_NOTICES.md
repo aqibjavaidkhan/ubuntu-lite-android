@@ -8,3 +8,6 @@ Ubuntu Lite Android bundles third-party software at build time.
 - **Android Gradle Plugin / Android SDK tooling**: subject to their respective Google licenses and terms.
 
 This project does not claim ownership of Ubuntu, PRoot, Termux packages, Android, or Apache Commons Compress. Review the licenses of the exact package versions included in any redistributed APK.
+
+- **Termux:X11 native X server (Lorie)**: GPL-3.0-or-later; source pinned to `7e5f5c5c9226e2cdab392b2efba91bc4bd86463e` and fetched by `tools/prepare_native_x11.py`. Source/license: https://github.com/termux/termux-x11.
+- **Mozilla Firefox**: Mozilla Public License 2.0; packaged from Mozilla's signed ARM64 APT repository: https://www.mozilla.org/en-US/MPL/2.0/ and https://packages.mozilla.org/apt/.
