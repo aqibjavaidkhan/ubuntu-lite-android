@@ -26,7 +26,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       dbus-x11 dbus-user-session \
       tigervnc-standalone-server tigervnc-common novnc websockify \
       synaptic \
-      libreoffice libreoffice-gtk3 \
       ca-certificates curl wget bzip2 xz-utils \
       fonts-dejavu-core fonts-noto-core fonts-noto-color-emoji fonts-liberation2 \
       xdg-utils desktop-file-utils gvfs gvfs-backends \
@@ -37,13 +36,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && mkdir -p /run /tmp /var/tmp /root/.vnc /root/.config/xfce4/xfconf/xfce-perchannel-xml /usr/local/bin \
     && chmod 1777 /tmp /var/tmp
 
-# Firefox's ARM64 archive is unpacked on the native x86 CI runner before docker build.
-# COPY avoids slow tar extraction under QEMU's ARM64 emulation.
-COPY tools/ubuntu-desktop/prebuilt/firefox /opt/firefox
-RUN set -eux; \
-    test -x /opt/firefox/firefox; \
-    ln -sfn /opt/firefox/firefox /usr/local/bin/firefox; \
-    mkdir -p /usr/local/share/applications /usr/share/applications
+RUN mkdir -p /usr/local/share/applications /usr/share/applications
 
 RUN cat > /usr/share/applications/ubuntu-software-manager.desktop <<'DESKTOP'
 [Desktop Entry]
@@ -56,19 +49,6 @@ Exec=/usr/sbin/synaptic
 Icon=system-software-install
 Terminal=false
 Categories=System;PackageManager;
-StartupNotify=true
-DESKTOP
-
-RUN cat > /usr/share/applications/firefox-mozilla.desktop <<'DESKTOP'
-[Desktop Entry]
-Version=1.0
-Type=Application
-Name=Firefox Web Browser
-Comment=Browse the Web
-Exec=/usr/local/bin/firefox
-Icon=/opt/firefox/browser/chrome/icons/default/default128.png
-Terminal=false
-Categories=Network;WebBrowser;
 StartupNotify=true
 DESKTOP
 
