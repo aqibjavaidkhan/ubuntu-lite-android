@@ -224,7 +224,7 @@ jobs:
       - name: Checkout the built commit
         uses: actions/checkout@v4
         with:
-          ref: \${{ github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Download split APK parts
         uses: actions/download-artifact@v4
@@ -253,7 +253,7 @@ jobs:
 
       - name: Publish preview release without touching stable release
         env:
-          GH_TOKEN: \${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -262,7 +262,7 @@ jobs:
             echo "Skipping stale build $GITHUB_SHA; branch now points to $latest_sha."
             exit 0
           fi
-          short_sha="\${GITHUB_SHA:0:7}"
+          short_sha="${GITHUB_SHA:0:7}"
           tag="ubuntu-desktop-native-x11-$short_sha"
           asset="/tmp/ubuntu-apk-parts/Ubuntu-Desktop-Android11plus.apk"
           notes="$(cat <<'NOTES'
