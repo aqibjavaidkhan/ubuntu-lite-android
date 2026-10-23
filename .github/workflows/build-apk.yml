@@ -1,4 +1,5 @@
 name: Build preinstalled Ubuntu Desktop APK
+run-name: Build themed lightweight Ubuntu APK
 
 on:
   workflow_dispatch:
