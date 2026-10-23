@@ -1,0 +1,64 @@
+name: Android virtual smoke test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [native-x11-display]
+    paths:
+      - '.github/workflows/android-virtual-smoke-test.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-virtual-smoke-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  emulator-smoke-test:
+    name: Install and launch on ARM64 Android emulator
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Download latest published native-X11 preview APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            'https://github.com/aqibjavaidkhan/ubuntu-lite-android/releases/download/ubuntu-desktop-native-x11-1c98783/Ubuntu-Desktop-Android11plus.apk' \
+            --output /tmp/Ubuntu-Desktop-Android11plus.apk
+          test -s /tmp/Ubuntu-Desktop-Android11plus.apk
+          ls -lh /tmp/Ubuntu-Desktop-Android11plus.apk
+          sha256sum /tmp/Ubuntu-Desktop-Android11plus.apk
+
+      - name: Boot ARM64 Android virtual device and smoke-test app
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: arm64-v8a
+          profile: pixel_2
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -memory 4096 -partition-size 8192
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            adb wait-for-device
+            adb shell settings put global window_animation_scale 0
+            adb shell settings put global transition_animation_scale 0
+            adb shell settings put global animator_duration_scale 0
+            adb install -r /tmp/Ubuntu-Desktop-Android11plus.apk
+            PACKAGE="$(adb shell dumpsys package packages | grep -o 'com\\.ubuntulite\\.launcher' | head -n 1 || true)"
+            if [ -z "$PACKAGE" ]; then
+              echo "Could not identify launcher package after installation." >&2
+              adb shell pm list packages | grep -i ubuntu || true
+              exit 1
+            fi
+            adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1
+            sleep 20
+            adb logcat -d -t 12000 > /tmp/ubuntu-lite-logcat.txt
+            if grep -E 'FATAL EXCEPTION|Fatal signal|Process .* has died' /tmp/ubuntu-lite-logcat.txt; then
+              echo "Crash-like log entries found; inspect log output above." >&2
+              exit 1
+            fi
+            adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' || true
+            echo "Install-and-launch smoke test completed. This does not prove the full Linux desktop, networking, audio, Bluetooth, or display rendering works."
