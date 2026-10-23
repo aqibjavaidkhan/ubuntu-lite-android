@@ -32,7 +32,7 @@ jobs:
             --output /tmp/Ubuntu-Desktop-Android11plus.apk
           test -s /tmp/Ubuntu-Desktop-Android11plus.apk
           ls -lh /tmp/Ubuntu-Desktop-Android11plus.apk
-          shasum -a 256 /tmp/Ubuntu-Desktop-Android11plus.apk | tee artifacts/virtual-device/apk-sha256.txt
+          sha256sum /tmp/Ubuntu-Desktop-Android11plus.apk | tee artifacts/virtual-device/apk-sha256.txt
 
       - name: Boot Android 15 x86_64 virtual device and smoke-test ARM64 app
         uses: reactivecircus/android-emulator-runner@v2
@@ -82,10 +82,10 @@ jobs:
 
             xml = Path("artifacts/virtual-device/launcher-hierarchy.xml").read_text(errors="replace")
             bounds = None
-            for node in re.findall(r"<node\\b([^>]+)>", xml):
-                attrs = dict(re.findall(r'([\\w-]+)="([^"]*)"', node))
+            for node in re.findall(r"<node\b([^>]+)>", xml):
+                attrs = dict(re.findall(r'([\w-]+)="([^"]*)"', node))
                 if attrs.get("content-desc") == "Linux Desktop" or attrs.get("text") == "Linux Desktop":
-                    bounds = re.search(r'\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]', attrs.get("bounds", ""))
+                    bounds = re.search(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', attrs.get("bounds", ""))
                     if bounds:
                         x1, y1, x2, y2 = map(int, bounds.groups())
                         subprocess.run(["adb", "shell", "input", "tap", str((x1+x2)//2), str((y1+y2)//2)], check=True)
