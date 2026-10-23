@@ -1,37 +1,46 @@
 # Ubuntu Desktop for Android — ARM64
 
-An experimental project exploring a Linux desktop experience on Android phones and tablets, without replacing Android or requiring root.
+An experimental Android app exploring an Ubuntu 22.04 ARM64 userspace with XFCE on Android phones and tablets, without replacing Android or requiring root.
 
-## Project goal
+## Project status: paused
 
-The long-term goal is a polished, mobile-friendly Linux desktop with an Ubuntu/Debian userspace, XFCE, and support for Linux applications. This is not a replacement operating system and is not Plasma Mobile.
+**Development and new APK builds are paused for now.** The project can be revisited later when the tooling and Android/Linux desktop integration are more mature. Do not start another build or emulator test just to produce another unverified APK.
 
-## Current status — paused (2026-10-23)
+## Last-known-good reference
 
-**Development and new APK builds are paused for now.** The project will be revisited when a more reliable approach or better technology is available. No new emulator runs or APK builds should be started as part of routine work while the project is paused.
+A screenshot supplied by the project owner on 2026-10-23 shows an XFCE desktop rendered on their Android phone through **Termux:X11**: desktop wallpaper, Applications panel, desktop icons, and a dock are visible.
 
-- A screenshot supplied by the project owner confirms that a desktop session was displayed on the phone through **Termux:X11**.
-- That screenshot is a reference for the desired desktop appearance and a clue for a future recovery; it does not identify the exact working commit or prove that the current standalone APK works.
-- The latest standalone APK crashes immediately on the target phone.
-- GitHub Actions can compile and package an APK, but a successful build does not prove it will launch on the phone.
-- The emulator smoke test did not establish a reliable working runtime.
+This confirms that the desktop display worked in that setup at least once. It does **not** identify the exact APK, commit, or configuration, and it does not prove that the current standalone APK works. Keep the screenshot as the visual target when development resumes.
 
-## Available builds
+Reference architecture to investigate in the future:
+- Android + Termux:X11 display path
+- Ubuntu/Debian ARM64 userland in PRoot
+- XFCE desktop session
+- Verify the exact launch commands/configuration before trying to bundle it into a standalone APK
 
-Existing releases are retained for reference: [GitHub Releases](https://github.com/aqibjavaidkhan/ubuntu-lite-android/releases).
+## Current verification status
 
-**No standalone APK is currently confirmed as working on the target phone.** Do not label any existing release stable or ask the owner to download the same failing build again.
+- The project has Android launcher code and experimental Ubuntu ARM64/XFCE packaging.
+- CI has produced APK packages, but package success is not the same as successful launch on a phone.
+- The latest standalone APK was reported to crash immediately on the owner's phone.
+- The screenshot above is evidence of a working Termux:X11 desktop setup, not evidence that a standalone APK is working.
+- No standalone APK is currently confirmed as a known-working release for the target phone.
+- No new emulator test is planned while the project is paused.
 
-## Future restart checklist
+## Downloads and source
 
-When work resumes:
+- [Available GitHub Releases](https://github.com/aqibjavaidkhan/ubuntu-lite-android/releases)
+- [Source repository](https://github.com/aqibjavaidkhan/ubuntu-lite-android)
 
-1. Use the Termux:X11 screenshot as the visual reference.
-2. Inspect the old launcher/display approach and repository history to identify the last known-good setup, if recoverable.
-3. Diagnose the immediate standalone APK launch crash before attempting another large build.
-4. Only publish a new APK after the owner can confirm that it launches and displays the desktop on the target phone.
-5. Verify touch interaction and Linux app launching before calling it stable.
+Existing releases are retained for historical comparison. Do not label any release as stable/working unless it is verified on the target phone.
+
+## When development resumes
+
+1. Recover the exact Termux:X11 startup commands and configuration that produced the desktop in the reference screenshot.
+2. Locate the corresponding last-known-good source/configuration, if it exists in repository history.
+3. Diagnose the standalone APK launch crash before attempting another large build.
+4. Build only after the startup path is understood, then verify launch, XFCE, touch, keyboard, and browser on the physical device.
 
 ## Technical notes
 
-The current experimental approach bundles an Ubuntu ARM64 userspace with PRoot and XFCE into an Android app. Native X11 integration has been explored, but device compatibility and the full desktop experience remain unverified. Android remains the host OS.
+This is not a replacement operating system and does not boot a separate Linux kernel. Linux applications run in a user-space environment under Android restrictions; compatibility and hardware access vary by device. Firefox and other desktop applications are goals, not guarantees of compatibility.
