@@ -72,7 +72,7 @@ jobs:
             fi
             sleep 5
             adb shell dumpsys activity activities > artifacts/virtual-device/activities.txt
-            if ! grep -E 'mResumedActivity|topResumedActivity' artifacts/virtual-device/activities.txt | grep -q 'com.termux.x11.MainActivity'; then
+            if grep -E 'mResumedActivity|topResumedActivity' artifacts/virtual-device/activities.txt | grep -q 'com.ubuntulite.launcher.MainActivity'; then
               adb shell uiautomator dump /sdcard/ubuntu-launcher.xml >/dev/null 2>&1 || true
               adb shell cat /sdcard/ubuntu-launcher.xml > artifacts/virtual-device/launcher-hierarchy.xml
               python3 - <<'PY'
