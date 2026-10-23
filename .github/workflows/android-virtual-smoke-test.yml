@@ -17,7 +17,7 @@ concurrency:
 jobs:
   emulator-smoke-test:
     name: Install and launch on ARM64 Android emulator
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
     steps:
       - name: Download latest published native-X11 preview APK
