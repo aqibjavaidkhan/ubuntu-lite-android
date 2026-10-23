@@ -58,6 +58,23 @@ unset XAUTHORITY
 echo "TigerVNC display is ready. Starting XFCE..."
 dbus-launch --exit-with-session startxfce4 > /root/.vnc/xfce.log 2>&1 &
 xfce_pid=$!
+
+# Apply touch-friendly XFCE sizing after its configuration daemon is available.
+# Keep these best-effort so a missing optional setting never blocks startup.
+(
+  for attempt in $(seq 1 15); do
+    if pgrep -x xfconfd >/dev/null 2>&1; then break; fi
+    sleep 1
+  done
+  xfconf-query -c xsettings -p /Gtk/FontName --create -t string -s "Noto Sans 12" >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-panel -p /panels/panel-1/size --create -t int -s 44 >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-panel -p /panels/panel-1/icon-size --create -t int -s 32 >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-panel -p /panels/panel-1/length --create -t double -s 1.0 >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-panel -p /panels/panel-1/length-adjust --create -t bool -s false >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-panel -p /panels/panel-1/autohide-behavior --create -t int -s 0 >/dev/null 2>&1 || true
+  xfconf-query -c xfwm4 -p /general/title_font --create -t string -s "Noto Sans Bold 12" >/dev/null 2>&1 || true
+) &
+
 sleep 2
 if ! kill -0 "$vnc_pid" 2>/dev/null; then
   echo "ERROR: TigerVNC stopped while XFCE was starting."
