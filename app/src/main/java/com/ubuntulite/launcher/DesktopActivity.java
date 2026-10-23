@@ -10,6 +10,8 @@ import android.net.ConnectivityManager;
 import android.net.LinkProperties;
 import android.net.Network;
 import android.net.Uri;
+import android.os.Build;
+import android.os.Environment;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -266,7 +268,6 @@ public final class DesktopActivity extends Activity {
                 }
                 updateBootProgress("Step 4/4: Opening native display and starting XFCE…");
                 runOnUiThread(this::openNativeX11Activity);
-                Thread.sleep(1200);
                 Process p = launchScript("root/ubuntu-desktop-start.sh");
                 desktopProcess = p;
                 Thread reader = new Thread(() -> readLog(p), "ubuntu-desktop-log");
@@ -307,17 +308,21 @@ public final class DesktopActivity extends Activity {
         if (!proot.canExecute() || !loader.isFile()) throw new IllegalStateException("Bundled ARM64 PRoot runtime not found.");
         List<String> args = new ArrayList<>();
         args.add(proot.getAbsolutePath());
-        String[] rest = {
+        java.util.Collections.addAll(args,
             "-r", rootfs.getAbsolutePath(), "-w", "/root", "-0",
             "-b", "/dev", "-b", "/proc", "-b", "/sys",
-            "-b", x11Tmp.getAbsolutePath() + ":/tmp",
+            "-b", x11Tmp.getAbsolutePath() + ":/tmp");
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()
+                && new File("/storage/emulated/0").isDirectory()) {
+            new File(rootfs, "mnt/phone").mkdirs();
+            java.util.Collections.addAll(args, "-b", "/storage/emulated/0:/mnt/phone");
+        }
+        java.util.Collections.addAll(args,
             "/usr/bin/env", "-i",
             "HOME=/root", "TMPDIR=/tmp", "TEMP=/tmp", "TMP=/tmp",
             "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
             "TERM=xterm-256color", "LANG=C.UTF-8", "DEBIAN_FRONTEND=noninteractive",
-            "/bin/bash", "/" + guestScript
-        };
-        java.util.Collections.addAll(args, rest);
+            "/bin/bash", "/" + guestScript);
         ProcessBuilder pb = new ProcessBuilder(args).redirectErrorStream(true);
         pb.environment().put("PROOT_LOADER", loader.getAbsolutePath());
         // Termux's packaged PRoot defaults to Termux's own private tmp path.

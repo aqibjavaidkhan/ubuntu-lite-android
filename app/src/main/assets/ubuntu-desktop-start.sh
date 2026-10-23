@@ -11,6 +11,13 @@ mkdir -p "$XDG_RUNTIME_DIR" /tmp/.X11-unix
 chmod 700 "$XDG_RUNTIME_DIR"
 chmod 1777 /tmp /tmp/.X11-unix
 
+# If Android shared storage is authorized and bound by the launcher, show it on
+# the XFCE desktop as a normal folder and expose it under /mnt/phone.
+if [ -d /mnt/phone ]; then
+  mkdir -p /root/Desktop
+  ln -sfn /mnt/phone "/root/Desktop/Phone Storage"
+fi
+
 # Existing installations also need an unprivileged Firefox user/launcher.
 if ! id ubuntu >/dev/null 2>&1 && command -v useradd >/dev/null 2>&1; then
   useradd --create-home --shell /bin/bash ubuntu || true

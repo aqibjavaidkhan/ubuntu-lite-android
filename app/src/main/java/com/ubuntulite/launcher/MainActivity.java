@@ -10,6 +10,8 @@ import android.net.ConnectivityManager;
 import android.net.LinkProperties;
 import android.net.Network;
 import android.os.BatteryManager;
+import android.os.Build;
+import android.os.Environment;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.text.InputType;
@@ -64,10 +66,12 @@ public final class MainActivity extends Activity {
     private static final int GREEN = Color.rgb(126, 231, 135);
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final ExecutorService storeWorker = Executors.newSingleThreadExecutor();
+    private final Object rootfsLock = new Object();
     private FrameLayout root;
     private LinearLayout homePage, drawerPage, terminalPage, quickPanel;
     private TextView terminalOutput, terminalState, clockText;
-    private EditText commandInput, appSearch;
+    private EditText commandInput, appSearch, storeSearch;
     private Button terminalStart, runButton;
     private Process shell;
     private BufferedWriter writer;
@@ -78,10 +82,10 @@ public final class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        applyImmersiveUi();
         getWindow().setStatusBarColor(BG_DARK);
         getWindow().setNavigationBarColor(BG_DARK);
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
-        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN);
         rootfs = new File(getFilesDir(), "ubuntu-rootfs");
         root = new FrameLayout(this);
         root.setBackgroundColor(BG);
@@ -111,6 +115,34 @@ public final class MainActivity extends Activity {
             }
             return true;
         });
+    }
+
+    private void applyImmersiveUi() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            getWindow().setDecorFitsSystemWindows(false);
+            android.view.WindowInsetsController controller = getWindow().getInsetsController();
+            if (controller != null) {
+                controller.hide(android.view.WindowInsets.Type.statusBars()
+                        | android.view.WindowInsets.Type.navigationBars());
+                controller.setSystemBarsBehavior(
+                        android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            }
+        } else {
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        }
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) applyImmersiveUi();
+    }
+
+    private boolean hasPhoneStorageAccess() {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager();
     }
 
     private FrameLayout.LayoutParams match() {
@@ -187,6 +219,8 @@ public final class MainActivity extends Activity {
         addTile(fav, "⚙", "Settings", Color.rgb(104, 101, 219), () -> launchSettings());
         addTile(fav, "▦", "Gallery", Color.rgb(181, 79, 140), () -> openGallery());
         addTile(fav, "⌗", "Calculator", Color.rgb(43, 151, 122), () -> openCalculator());
+        addTile(fav, "▧", "App Store", Color.rgb(52, 145, 113), () -> showAppStore());
+        addTile(fav, "▣", "Linux Desktop", Color.rgb(233, 84, 32), () -> openDesktop());
         page.addView(fav, new LinearLayout.LayoutParams(-1, 0, 1));
 
         LinearLayout dock = row(); dock.setGravity(Gravity.CENTER); dock.setPadding(0, dp(7), 0, dp(5));
@@ -240,6 +274,8 @@ public final class MainActivity extends Activity {
         addTile(grid, "⚙", "Settings", Color.rgb(104,101,219), () -> launchSettings());
         addTile(grid, "▦", "Gallery", Color.rgb(181,79,140), () -> openGallery());
         addTile(grid, "⌗", "Calculator", Color.rgb(43,151,122), () -> openCalculator());
+        addTile(grid, "▧", "App Store", Color.rgb(52,145,113), () -> showAppStore());
+        addTile(grid, "▣", "Linux Desktop", Color.rgb(233,84,32), () -> openDesktop());
         addTile(grid, "♫", "Music", Color.rgb(206,85,99), () -> launchUrl("https://music.youtube.com"));
         addTile(grid, "◷", "Clock", Color.rgb(50,147,185), () -> openClock());
         addTile(grid, "?", "About", Color.rgb(104,112,127), () -> showAbout());
@@ -259,6 +295,200 @@ public final class MainActivity extends Activity {
             public void afterTextChanged(Editable s) {}
         });
         return page;
+    }
+
+    private void showAppStore() {
+        hideQuickPanel();
+        LinearLayout page = column();
+        page.setPadding(dp(16), dp(10), dp(16), dp(12));
+        page.setBackgroundColor(BG);
+        LinearLayout header = row();
+        TextView back = pill("‹ Home");
+        back.setOnClickListener(v -> showHome());
+        header.addView(back);
+        TextView heading = text("  App Store", 24, FG);
+        heading.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        header.addView(heading, new LinearLayout.LayoutParams(0, dp(48), 1));
+        page.addView(header);
+        page.addView(text("Install real Ubuntu repository packages", 12, MUTED));
+
+        storeSearch = new EditText(this);
+        storeSearch.setSingleLine(true);
+        storeSearch.setTextColor(FG);
+        storeSearch.setHintTextColor(MUTED);
+        storeSearch.setHint("Search featured apps");
+        storeSearch.setBackground(shape(CARD, 14));
+        storeSearch.setPadding(dp(12), dp(5), dp(12), dp(5));
+        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(-1, dp(46));
+        searchLp.topMargin = dp(12);
+        page.addView(storeSearch, searchLp);
+
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout packages = column();
+        packages.setPadding(0, dp(7), 0, dp(8));
+        scroll.addView(packages);
+        page.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        addPackageCard(packages, "Git", "Version control tools", "git");
+        addPackageCard(packages, "Python tools", "Python 3 and pip", "python3-pip");
+        addPackageCard(packages, "HTop", "Interactive process monitor", "htop");
+        addPackageCard(packages, "Nano", "Terminal text editor", "nano");
+        addPackageCard(packages, "Curl", "Transfer data from URLs", "curl");
+        addPackageCard(packages, "VLC", "Media player and codecs", "vlc");
+        addPackageCard(packages, "GIMP", "Image editing application", "gimp");
+        addPackageCard(packages, "Neofetch", "System information in terminal", "neofetch");
+
+        storeSearch.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                String query = s.toString().trim().toLowerCase(Locale.ROOT);
+                for (int i = 0; i < packages.getChildCount(); i++) {
+                    View card = packages.getChildAt(i);
+                    String value = card.getContentDescription() == null ? "" :
+                            card.getContentDescription().toString().toLowerCase(Locale.ROOT);
+                    card.setVisibility(value.contains(query) ? View.VISIBLE : View.GONE);
+                }
+            }
+            public void afterTextChanged(Editable s) {}
+        });
+        setPage(page);
+    }
+
+    private void addPackageCard(LinearLayout list, String name, String description, String packageName) {
+        LinearLayout card = column();
+        card.setPadding(dp(13), dp(10), dp(13), dp(10));
+        card.setBackground(shape(CARD, 15));
+        card.setContentDescription((name + " " + description + " " + packageName).toLowerCase(Locale.ROOT));
+        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(-1, -2);
+        cardLp.setMargins(0, dp(5), 0, dp(5));
+        list.addView(card, cardLp);
+        TextView title = text(name, 16, FG);
+        title.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        card.addView(title);
+        TextView details = text(description + " · " + packageName, 12, MUTED);
+        details.setPadding(0, dp(2), 0, dp(5));
+        card.addView(details);
+        LinearLayout actionRow = row();
+        TextView status = text("Ubuntu repository package", 11, MUTED);
+        actionRow.addView(status, new LinearLayout.LayoutParams(0, dp(38), 1));
+        Button install = new Button(this);
+        install.setText("Install");
+        install.setAllCaps(false);
+        install.setOnClickListener(v -> installPackage(packageName, install, status));
+        actionRow.addView(install, new LinearLayout.LayoutParams(dp(104), dp(40)));
+        card.addView(actionRow);
+    }
+
+    private void installPackage(String packageName, Button button, TextView status) {
+        if (!packageName.matches("[a-z0-9.+-]+")) {
+            status.setText("Invalid package name");
+            return;
+        }
+        button.setEnabled(false);
+        button.setText("Wait…");
+        status.setText("Preparing Ubuntu package manager");
+        storeWorker.execute(() -> {
+            StringBuilder log = new StringBuilder();
+            int code = -1;
+            String failure = null;
+            try {
+                code = runUbuntuCommand("apt-get update -qq && apt-get install -y --no-install-recommends " + packageName, log);
+            } catch (Exception e) {
+                failure = e.getMessage();
+            }
+            final int result = code;
+            final String error = failure;
+            final String tail = log.length() > 450 ? log.substring(log.length() - 450) : log.toString();
+            runOnUiThread(() -> {
+                button.setEnabled(true);
+                button.setText(result == 0 ? "Installed" : "Retry");
+                if (result == 0) status.setText("Installed successfully");
+                else status.setText("Install failed. " + (error != null ? error :
+                        (tail.isEmpty() ? "Check internet and storage." : tail.replace('\n', ' '))));
+            });
+        });
+    }
+
+    private int runUbuntuCommand(String command, StringBuilder output) throws Exception {
+        installRootfs();
+        configureDns();
+        File runtimeTmp = new File(getCacheDir(), "proot-tmp");
+        if (!runtimeTmp.exists() && !runtimeTmp.mkdirs())
+            throw new IllegalStateException("Cannot create PRoot temp directory");
+        File libs = new File(getApplicationInfo().nativeLibraryDir);
+        File proot = new File(libs, "libproot.so");
+        File loader = new File(libs, "libproot-loader.so");
+        if (!proot.canExecute() || !loader.isFile())
+            throw new IllegalStateException("Bundled PRoot runtime missing");
+        List<String> args = new ArrayList<>();
+        args.add(proot.getAbsolutePath());
+        java.util.Collections.addAll(args, "-r", rootfs.getAbsolutePath(), "-w", "/root", "-0",
+                "-b", "/dev", "-b", "/proc", "-b", "/sys",
+                "-b", runtimeTmp.getAbsolutePath() + ":/tmp");
+        if (hasPhoneStorageAccess() && new File("/storage/emulated/0").isDirectory()) {
+            new File(rootfs, "mnt/phone").mkdirs();
+            args.add("-b");
+            args.add("/storage/emulated/0:/mnt/phone");
+        }
+        java.util.Collections.addAll(args, "/usr/bin/env", "-i", "HOME=/root",
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "TERM=xterm-256color", "LANG=C.UTF-8", "TMPDIR=/tmp",
+                "DEBIAN_FRONTEND=noninteractive", "/bin/bash", "--noprofile", "--norc", "-c", command);
+        ProcessBuilder pb = new ProcessBuilder(args).redirectErrorStream(true);
+        pb.environment().put("PROOT_LOADER", loader.getAbsolutePath());
+        pb.environment().put("PROOT_TMP_DIR", runtimeTmp.getAbsolutePath());
+        pb.environment().put("TMPDIR", runtimeTmp.getAbsolutePath());
+        pb.environment().put("LD_LIBRARY_PATH", libs.getAbsolutePath());
+        pb.environment().put("PROOT_NO_SECCOMP", "1");
+        Process process = pb.start();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            String outputLine;
+            while ((outputLine = reader.readLine()) != null) {
+                output.append(outputLine).append((char) 10);
+                if (output.length() > 2200) output.delete(0, output.length() - 1600);
+            }
+        }
+        return process.waitFor();
+    }
+
+    private void openDesktop() {
+        hideQuickPanel();
+        try {
+            startActivity(new Intent(this, DesktopActivity.class));
+        } catch (Exception e) {
+            toast("Could not open Ubuntu desktop: " + e.getMessage());
+        }
+    }
+
+    private void openPhoneStorage() {
+        hideQuickPanel();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("Allow phone storage")
+                    .setMessage("To browse shared phone storage inside Ubuntu, allow file access here. Ubuntu exposes it at /mnt/phone. You can continue without granting access.")
+                    .setPositiveButton("Open permission settings", (dialog, which) -> {
+                        try {
+                            Intent settings = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                                    android.net.Uri.parse("package:" + getPackageName()));
+                            startActivity(settings);
+                        } catch (Exception first) {
+                            try { startActivity(new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)); }
+                            catch (Exception second) { toast("Storage permission settings unavailable"); }
+                        }
+                    })
+                    .setNegativeButton("Not now", (dialog, which) -> dialog.dismiss())
+                    .show();
+            return;
+        }
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Phone storage is ready")
+                .setMessage("Inside Ubuntu, open Files and browse to /mnt/phone. Downloads, Documents and Pictures will be available there.")
+                .setPositiveButton("Open Ubuntu desktop", (dialog, which) -> openDesktop())
+                .setNegativeButton("Cancel", (dialog, which) -> dialog.dismiss())
+                .show();
+    }
+
+    private void openFiles() {
+        openPhoneStorage();
     }
 
     private LinearLayout buildTerminal() {
@@ -373,12 +603,18 @@ public final class MainActivity extends Activity {
                 File loader = new File(libs, "libproot-loader.so");
                 if (!proot.canExecute() || !loader.isFile()) throw new IllegalStateException("Bundled PRoot runtime missing");
                 List<String> cmd = new ArrayList<>(); cmd.add(proot.getAbsolutePath());
-                String[] args = {"-r", rootfs.getAbsolutePath(), "-w", "/root", "-0", "-b", "/dev", "-b", "/proc", "-b", "/sys",
-                    "-b", runtimeTmp.getAbsolutePath() + ":/tmp", "/usr/bin/env", "-i", "HOME=/root",
-                    "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-                    "TMPDIR=/tmp", "TMP=/tmp", "TEMP=/tmp", "TERM=xterm-256color",
-                    "PS1=ubuntu-lite# ", "/bin/bash", "--noprofile", "--norc"};
-                java.util.Collections.addAll(cmd, args);
+                java.util.Collections.addAll(cmd, "-r", rootfs.getAbsolutePath(), "-w", "/root", "-0",
+                        "-b", "/dev", "-b", "/proc", "-b", "/sys",
+                        "-b", runtimeTmp.getAbsolutePath() + ":/tmp");
+                if (hasPhoneStorageAccess() && new File("/storage/emulated/0").isDirectory()) {
+                    new File(rootfs, "mnt/phone").mkdirs();
+                    java.util.Collections.addAll(cmd, "-b", "/storage/emulated/0:/mnt/phone");
+                }
+                java.util.Collections.addAll(cmd, "/usr/bin/env", "-i", "HOME=/root",
+                        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                        "TMPDIR=/tmp", "TMP=/tmp", "TEMP=/tmp", "TERM=xterm-256color",
+                        "LANG=C.UTF-8", "PS1=ubuntu-lite# ", "DEBIAN_FRONTEND=noninteractive",
+                        "/usr/bin/script", "-qefc", "/bin/bash --noprofile --norc -i", "/dev/null");
                 ProcessBuilder pb = new ProcessBuilder(cmd).redirectErrorStream(true);
                 pb.environment().put("PROOT_LOADER", loader.getAbsolutePath());
                 pb.environment().put("PROOT_TMP_DIR", runtimeTmp.getAbsolutePath());
@@ -419,7 +655,8 @@ public final class MainActivity extends Activity {
     }
 
     private void installRootfs() throws Exception {
-        if (new File(rootfs, ".installed").isFile() && new File(rootfs, "bin/bash").exists()) return;
+        synchronized (rootfsLock) {
+        if (rootfsReady()) return;
         delete(rootfs); if (!rootfs.mkdirs()) throw new IllegalStateException("Cannot create Ubuntu directory");
         Path base = rootfs.toPath().toAbsolutePath().normalize();
         List<TarArchiveEntry> links = new ArrayList<>(); List<Path> linkPaths = new ArrayList<>();
@@ -455,6 +692,13 @@ public final class MainActivity extends Activity {
         }
         new File(rootfs, ".installed").createNewFile();
         line("Ubuntu filesystem installed.");
+        }
+    }
+
+    private boolean rootfsReady() {
+        return new File(rootfs, "bin/bash").isFile()
+                && (new File(rootfs, ".installed").isFile()
+                    || new File(rootfs, "root/.ubuntu-preinstalled-desktop-v1").isFile());
     }
 
     private void sendCommand() {
@@ -472,10 +716,17 @@ public final class MainActivity extends Activity {
         if (terminalState != null) terminalState.setText("Ubuntu stopped");
     }
     private void line(String s) {
+        String plain = s == null ? "" : s.replaceAll(
+                java.util.regex.Pattern.quote(String.valueOf((char) 27)) + "\\[[0-?]*[ -/]*[@-~]", "");
         runOnUiThread(() -> {
             if (terminalOutput == null) return;
-            terminalOutput.append(s + "\n");
-            if (terminalOutput.getParent() instanceof ScrollView) ((ScrollView)terminalOutput.getParent()).post(() -> ((ScrollView)terminalOutput.getParent()).fullScroll(View.FOCUS_DOWN));
+            terminalOutput.append(plain + "\n");
+            if (terminalOutput.length() > 80000) {
+                int trim = terminalOutput.length() - 60000;
+                terminalOutput.getEditableText().delete(0, trim);
+            }
+            if (terminalOutput.getParent() instanceof ScrollView)
+                ((ScrollView)terminalOutput.getParent()).post(() -> ((ScrollView)terminalOutput.getParent()).fullScroll(View.FOCUS_DOWN));
         });
     }
     private void delete(File f) {
