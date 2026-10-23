@@ -60,7 +60,7 @@ public final class DesktopActivity extends Activity {
     private TextView bootTitle, bootStatus, bootLog;
     private ProgressBar bootProgress;
     private ScrollView logScroll;
-    private Button installButton, retryButton;
+    private Button installButton, retryButton, keyboardButton;
     private Process desktopProcess;
     private File rootfs, prootTmp;
     private volatile boolean shuttingDown;
@@ -212,6 +212,25 @@ public final class DesktopActivity extends Activity {
         bootPanel.addView(logScroll, logsLp);
 
         root.addView(bootPanel, new FrameLayout.LayoutParams(-1, -1));
+
+        // Touch-first floating control for the Android on-screen keyboard.
+        keyboardButton = new Button(this);
+        keyboardButton.setText("⌨  Keyboard");
+        keyboardButton.setAllCaps(false);
+        keyboardButton.setTextSize(13);
+        keyboardButton.setElevation(dp(8));
+        keyboardButton.setBackground(rounded(Color.rgb(37, 31, 45), 24));
+        keyboardButton.setTextColor(FG);
+        keyboardButton.setVisibility(View.GONE);
+        keyboardButton.setOnClickListener(v -> desktopView.evaluateJavascript(
+                "(function(){var b=document.getElementById('noVNC_keyboard_button');" +
+                "if(b){b.click();return 'toolbar';}" +
+                "var e=document.querySelector('textarea,input,[contenteditable=true]');" +
+                "if(e){e.focus();return 'focused';}return 'no-keyboard-target';})()", null));
+        FrameLayout.LayoutParams keyboardLp = new FrameLayout.LayoutParams(
+                dp(132), dp(48), Gravity.BOTTOM | Gravity.END);
+        keyboardLp.setMargins(dp(12), dp(12), dp(16), dp(20));
+        root.addView(keyboardButton, keyboardLp);
         setContentView(root);
     }
 
@@ -356,6 +375,7 @@ public final class DesktopActivity extends Activity {
                 runOnUiThread(() -> {
                     desktopView.loadUrl("http://127.0.0.1:6080/vnc.html?autoconnect=1&resize=scale&reconnect=1&reconnect_delay=1000");
                     bootPanel.setVisibility(View.GONE);
+                    if (keyboardButton != null) keyboardButton.setVisibility(View.VISIBLE);
                 });
                 return;
             } catch (Exception ignored) {}
@@ -516,6 +536,7 @@ public final class DesktopActivity extends Activity {
         try { if (desktopProcess != null) desktopProcess.destroy(); } catch (Exception ignored) {}
         desktopProcess = null;
         desktopView.loadUrl("about:blank");
+        if (keyboardButton != null) keyboardButton.setVisibility(View.GONE);
         showInstallScreen();
         shuttingDown = false;
     }
