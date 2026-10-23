@@ -65,8 +65,17 @@ if [ "$x_ready" -ne 1 ]; then
 fi
 
 echo "Native X11 is ready. Starting XFCE without VNC/noVNC..."
-dbus-launch --exit-with-session startxfce4 > /root/.ubuntu-lite-xfce.log 2>&1 &
-xfce_pid=$!
+: > /root/.ubuntu-lite-xfce.log
+if command -v dbus-launch >/dev/null 2>&1; then
+  dbus-launch --exit-with-session startxfce4 >> /root/.ubuntu-lite-xfce.log 2>&1 &
+  xfce_pid=$!
+elif command -v dbus-run-session >/dev/null 2>&1; then
+  dbus-run-session -- startxfce4 >> /root/.ubuntu-lite-xfce.log 2>&1 &
+  xfce_pid=$!
+else
+  echo "ERROR: Neither dbus-launch nor dbus-run-session is installed."
+  exit 12
+fi
 (
   for attempt in $(seq 1 20); do
     if pgrep -x xfconfd >/dev/null 2>&1; then break; fi
@@ -78,18 +87,25 @@ xfce_pid=$!
   xfconf-query -c xfce4-panel -p /panels/panel-1/autohide-behavior --create -t int -s 0 >/dev/null 2>&1 || true
   xfconf-query -c xfwm4 -p /general/title_font --create -t string -s "Noto Sans Bold 12" >/dev/null 2>&1 || true
 ) &
+desktop_ready=0
 for attempt in $(seq 1 60); do
   if ! kill -0 "$xfce_pid" 2>/dev/null; then
-    echo "ERROR: XFCE exited during startup."
+    echo "ERROR: XFCE launcher exited during startup (exit code may be in the log)."
     cat /root/.ubuntu-lite-xfce.log 2>/dev/null || true
     exit 14
   fi
   if pgrep -x xfce4-session >/dev/null 2>&1; then
     echo "UBUNTU_DESKTOP_DISPLAY_READY"
+    desktop_ready=1
     break
   fi
   sleep 1
 done
+if [ "$desktop_ready" -ne 1 ]; then
+  echo "ERROR: XFCE session did not appear within 60 seconds."
+  cat /root/.ubuntu-lite-xfce.log 2>/dev/null || true
+  exit 15
+fi
 # Upgrade existing installs without deleting home files: install Firefox from
 # Mozilla's signed ARM64 repository and clean obsolete VNC packages after XFCE starts.
 if ! command -v firefox >/dev/null 2>&1 && [ ! -e /root/.ubuntu-lite-browser-migration.lock ]; then
