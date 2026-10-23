@@ -18,22 +18,31 @@ RUN set -eux; \
       fi; \
     done
 
+# Use Mozilla's signed APT repository for native ARM64 Firefox packages.
+# Ubuntu Jammy's Firefox package is a Snap transition and does not suit PRoot.
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gnupg && \
+    mkdir -p /etc/apt/keyrings /etc/apt/preferences.d && \
+    curl -fsSL https://packages.mozilla.org/apt/repo-signing-key.gpg | gpg --dearmor -o /etc/apt/keyrings/packages.mozilla.org.gpg && \
+    printf 'Types: deb\nURIs: https://packages.mozilla.org/apt\nSuites: mozilla\nComponents: main\nArchitectures: arm64\nSigned-By: /etc/apt/keyrings/packages.mozilla.org.gpg\n' > /etc/apt/sources.list.d/mozilla.sources && \
+    printf 'Package: *\nPin: origin packages.mozilla.org\nPin-Priority: 1000\n\nPackage: firefox*\nPin: release o=Ubuntu\nPin-Priority: -1\n' > /etc/apt/preferences.d/mozilla && \
+    apt-get update && rm -rf /var/lib/apt/lists/*
+
 # Prevent package post-install scripts from trying to start system services.
 RUN printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d && chmod 755 /usr/sbin/policy-rc.d
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       xfce4 xfce4-goodies xfce4-terminal thunar mousepad \
       dbus-x11 dbus-user-session \
-      tigervnc-standalone-server tigervnc-common novnc websockify \
-      synaptic plank pavucontrol \
+      synaptic plank pavucontrol firefox \
       ca-certificates curl wget bzip2 xz-utils \
       fonts-dejavu-core fonts-noto-core fonts-noto-color-emoji fonts-liberation2 \
       xdg-utils desktop-file-utils gvfs gvfs-backends \
-      x11-xserver-utils locales sudo \
+      x11-xserver-utils x11-utils xfonts-base locales sudo \
+      git python3 python3-venv python3-pip build-essential htop nano zip unzip file \
       adwaita-icon-theme hicolor-icon-theme gsettings-desktop-schemas librsvg2-common \
       psmisc procps iproute2 iputils-ping net-tools \
     && locale-gen en_US.UTF-8 \
-    && mkdir -p /run /tmp /var/tmp /root/.vnc /root/.config/xfce4/xfconf/xfce-perchannel-xml /usr/local/bin \
+    && mkdir -p /run /tmp /var/tmp /root/.config/xfce4/xfconf/xfce-perchannel-xml /usr/local/bin \
     && chmod 1777 /tmp /var/tmp
 
 RUN mkdir -p /usr/local/share/applications /usr/share/applications \
@@ -163,7 +172,17 @@ Terminal=false
 Categories=Utility;TextEditor;
 DESKTOP
 
-RUN for item in ubuntu-files ubuntu-terminal ubuntu-editor ubuntu-software-manager; do \
+RUN cat > /usr/share/applications/ubuntu-browser.desktop <<'DESKTOP'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Firefox Browser
+Exec=firefox
+Icon=firefox
+Terminal=false
+Categories=Network;WebBrowser;
+DESKTOP
+RUN for item in ubuntu-files ubuntu-terminal ubuntu-editor ubuntu-software-manager ubuntu-browser; do \
       printf '[PlankDockItemPreferences]\nLauncher=file:///usr/share/applications/%s.desktop\n' "$item" \
         > "/root/.config/plank/dock1/launchers/$item.dockitem"; \
     done
@@ -182,19 +201,7 @@ RUN if [ -f /usr/share/applications/synaptic.desktop ]; then \
       sed -i 's|^Exec=.*|Exec=/usr/sbin/synaptic|' /usr/share/applications/synaptic.desktop; \
     fi
 
-RUN cat > /root/.vnc/xstartup <<'XSTART'
-#!/bin/sh
-unset SESSION_MANAGER
-unset DBUS_SESSION_BUS_ADDRESS
-export HOME=/root
-export XDG_RUNTIME_DIR=/tmp/runtime-root
-mkdir -p "$XDG_RUNTIME_DIR"
-chmod 700 "$XDG_RUNTIME_DIR"
-exec dbus-launch --exit-with-session startxfce4
-XSTART
-
-RUN chmod 755 /root/.vnc/xstartup && \
-    mkdir -p /tmp/runtime-root /tmp/.X11-unix && \
+RUN mkdir -p /tmp/runtime-root /tmp/.X11-unix && \
     chmod 700 /tmp/runtime-root && \
     dbus-uuidgen > /etc/machine-id && \
     touch /root/.ubuntu-lite-desktop-ready /root/.ubuntu-preinstalled-desktop-v1 && \
