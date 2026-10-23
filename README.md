@@ -1,35 +1,42 @@
-# Preinstalled Ubuntu Desktop for Android (ARM64)
+# Ubuntu Desktop for Android — ARM64
 
-This project builds an Android APK containing a **preinstalled Ubuntu 22.04 ARM64 desktop filesystem**. The APK includes the Ubuntu OS userland, XFCE, Mozilla Firefox, LibreOffice, Synaptic graphical package manager, desktop fonts and utilities, and the PRoot native runtime.
+An experimental Android app that aims to provide an Ubuntu 22.04 ARM64 userspace with an XFCE desktop on Android phones and tablets, without replacing Android or requiring root.
 
-## First launch — no package downloads
+## Project goal
 
-The GitHub Actions workflow creates the complete ARM64 root filesystem during the APK build, installs the desktop and software into that filesystem, compresses it, and embeds it in the APK. On the phone, the first launch only extracts that bundled filesystem into the app's private storage and starts the desktop session. It should not run `apt install`, fetch Firefox, or download the desktop packages during startup.
+The goal is a practical, mobile-friendly Linux desktop experience on an Android phone/tablet, with a real Linux userspace and the ability to run Linux applications such as Firefox. This is **not a replacement operating system** and it is not Plasma Mobile.
 
-The extracted desktop uses XFCE displayed through a VNC/noVNC view embedded in the app. App/file system startup still requires free local storage. Allow several GB of free space for the expanded Ubuntu image. The APK itself is much larger than the earlier 27 MB base-only builds because it contains the installed software.
+## Development status (updated 2026-10-23)
 
-## Included software
+- Android launcher / home UI: implemented in the current source.
+- Ubuntu ARM64 userspace, XFCE, Firefox and PRoot packaging: build pipeline produces a bundled APK.
+- Native X11 display path: experimental build exists.
+- APK compilation and package-integrity checks: passing in GitHub Actions.
+- **Physical-device runtime: currently failing/unverified.** The latest APK crashes immediately on the user's phone. A successful CI build does not prove that the app launches on-device.
+- Android emulator smoke test: not passing reliably, so it has not established a working runtime.
+- Browser, touch interaction, and full XFCE desktop session on the target phone/tablet: not yet verified.
 
-- Ubuntu 22.04 LTS ARM64 userland from the official Ubuntu image
-- XFCE desktop and XFCE Terminal
-- Mozilla Firefox for Linux ARM64
-- LibreOffice
-- Synaptic graphical package manager
-- Ubuntu APT repositories configured with official components
+## Downloads
 
-Snap Store and snap packages are not included; they require snapd/system-service functionality that this unrooted PRoot runtime does not provide. Synaptic/apt can use Ubuntu .deb repositories, but application install/upgrade operations inside PRoot may still be affected by Android filesystem and PRoot limitations. The Android kernel and Android operating system are not replaced.
+Open [GitHub Releases](https://github.com/aqibjavaidkhan/ubuntu-lite-android/releases) to see the available APK builds.
 
-## Build a preinstalled APK
+**Important:** No release is currently confirmed as working on the target phone. The oldest release is retained for comparison, but it must not be described as a known-working APK until it has been launched successfully on the phone. The latest experimental native-X11 APK is a diagnostic preview, not a verified stable release.
 
-1. Open the repository's **Actions** tab.
-2. Select **Build preinstalled Ubuntu Desktop APK**.
-3. Wait for the ARM64 image build and APK payload checks to finish.
-4. Download the artifact named **Ubuntu-Desktop-Preinstalled-ARM64-APK**. The artifact ZIP contains `app-debug.apk`.
+## Technical approach
 
-The build verifies that the embedded compressed filesystem contains the preinstalled desktop marker, Firefox, LibreOffice, and Synaptic, and that the asset is well above the size of the old base-only rootfs.
+- Android host application, minimum Android 11 / ARM64 target.
+- Ubuntu 22.04 ARM64 userspace running in PRoot.
+- XFCE desktop and Linux applications packaged into the APK.
+- Experimental native X11 display integration.
+- Android remains the host operating system; hardware support and access to all Linux desktop applications are not guaranteed.
 
-Minimum Android version: Android 11 (API 30), ARM64. The APK is debug-signed for personal sideloading; Play Protect may still show a generic warning for a sideloaded/debug build. The desktop has not been hardware-tested on every Android device.
+## Next priorities
 
-## Reproducibility and notices
+1. Trace the immediate launch crash using device crash logs.
+2. Identify the last commit that actually launched successfully on the target phone, if available.
+3. Restore that known-good state and publish a clearly labelled APK.
+4. Verify first launch, XFCE startup, display, touch, and browser on the target phone before calling a release stable.
 
-The image build uses official Ubuntu Jammy ARM64 packages and Mozilla's official Linux ARM64 Firefox download. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+## Build verification
+
+GitHub Actions verifies APK packaging and bundled filesystem contents. These checks are useful but do **not** replace testing on a physical Android device. Please report the Android device model, Android version, and crash/logcat output when contributing a launch diagnosis.
