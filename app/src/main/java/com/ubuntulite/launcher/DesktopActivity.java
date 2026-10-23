@@ -21,6 +21,7 @@ import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
@@ -57,6 +58,8 @@ public final class DesktopActivity extends Activity {
     private WebView desktopView;
     private LinearLayout bootPanel;
     private TextView bootTitle, bootStatus, bootLog;
+    private ProgressBar bootProgress;
+    private ScrollView logScroll;
     private Button installButton, retryButton;
     private Process desktopProcess;
     private File rootfs, prootTmp;
@@ -166,6 +169,12 @@ public final class DesktopActivity extends Activity {
         statusLp.topMargin = dp(9);
         bootPanel.addView(bootStatus, statusLp);
 
+        bootProgress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        bootProgress.setIndeterminate(true);
+        LinearLayout.LayoutParams progressLp = new LinearLayout.LayoutParams(-1, dp(6));
+        progressLp.topMargin = dp(18);
+        bootPanel.addView(bootProgress, progressLp);
+
         installButton = new Button(this);
         installButton.setText("Start Ubuntu Desktop");
         installButton.setAllCaps(false);
@@ -190,17 +199,17 @@ public final class DesktopActivity extends Activity {
         detailsLp.topMargin = dp(14);
         bootPanel.addView(details, detailsLp);
 
-        ScrollView logs = new ScrollView(this);
-        logs.setBackground(rounded(Color.rgb(7, 5, 10), 12));
+        logScroll = new ScrollView(this);
+        logScroll.setBackground(rounded(Color.rgb(7, 5, 10), 12));
         bootLog = label("", 11, Color.rgb(215, 209, 220));
         bootLog.setTypeface(Typeface.MONOSPACE);
         bootLog.setGravity(Gravity.TOP);
         bootLog.setPadding(dp(11), dp(10), dp(11), dp(10));
-        logs.addView(bootLog);
+        logScroll.addView(bootLog);
         LinearLayout.LayoutParams logsLp = new LinearLayout.LayoutParams(-1, 0, 1);
         logsLp.topMargin = dp(16);
-        logs.setVisibility(View.GONE); // Keep developer output hidden; users should see a clean launch screen, never terminal logs.
-        bootPanel.addView(logs, logsLp);
+        logScroll.setVisibility(View.GONE);
+        bootPanel.addView(logScroll, logsLp);
 
         root.addView(bootPanel, new FrameLayout.LayoutParams(-1, -1));
         setContentView(root);
@@ -213,7 +222,7 @@ public final class DesktopActivity extends Activity {
         installButton.setText("Start Ubuntu Desktop");
         retryButton.setVisibility(View.GONE);
         bootTitle.setText("Ubuntu Desktop");
-        bootStatus.setText("Preinstalled Ubuntu 22.04 LTS · XFCE · Firefox · LibreOffice");
+        bootStatus.setText("Ubuntu 22.04 LTS · XFCE · Dark mountain theme");
         appendLog("Ubuntu desktop is preinstalled in the APK. No first-run package download is required.");
         appendLog("First start unpacks the local image and may take several minutes; leave several GB of free storage.");
     }
@@ -223,6 +232,7 @@ public final class DesktopActivity extends Activity {
             bootPanel.setVisibility(View.VISIBLE);
             bootTitle.setText("Starting Ubuntu desktop");
             bootStatus.setText(status);
+            bootProgress.setVisibility(View.VISIBLE);
         });
     }
 
@@ -269,7 +279,9 @@ public final class DesktopActivity extends Activity {
                 appendLog("DESKTOP START FAILED: " + e.getMessage());
                 runOnUiThread(() -> {
                     bootTitle.setText("Ubuntu desktop did not start");
-                    bootStatus.setText("Ubuntu could not start. Tap Restart Ubuntu Desktop to try again.");
+                    bootStatus.setText("Startup error: " + (e.getMessage() == null ? "Unknown error" : e.getMessage()) + "\\nSee diagnostic details below, then retry.");
+                    bootProgress.setVisibility(View.GONE);
+                    logScroll.setVisibility(View.VISIBLE);
                     retryButton.setVisibility(View.VISIBLE);
                 });
             }
@@ -313,13 +325,21 @@ public final class DesktopActivity extends Activity {
 
     private void waitForDesktopBridge() {
         long deadline = System.currentTimeMillis() + 120000L;
+        long nextProgressUpdate = 0L;
         while (!shuttingDown && System.currentTimeMillis() < deadline) {
+            long elapsedSeconds = (120000L - Math.max(0L, deadline - System.currentTimeMillis())) / 1000L;
+            if (System.currentTimeMillis() >= nextProgressUpdate) {
+                updateBootProgress("Step 3/3: Waiting for XFCE display… " + elapsedSeconds + " seconds");
+                nextProgressUpdate = System.currentTimeMillis() + 5000L;
+            }
             Process p = desktopProcess;
             if (p == null || !p.isAlive()) {
                 appendLog("Desktop process exited before the embedded display became ready.");
                 runOnUiThread(() -> {
                     bootTitle.setText("Ubuntu desktop failed to start");
-                    bootStatus.setText("Ubuntu could not start. Tap Restart Ubuntu Desktop to try again.");
+                    bootStatus.setText("The desktop process stopped before the display was ready. Diagnostic output is shown below.");
+                    bootProgress.setVisibility(View.GONE);
+                    logScroll.setVisibility(View.VISIBLE);
                     installButton.setVisibility(View.VISIBLE);
                     installButton.setText("Retry setup");
                     installButton.setEnabled(true);
@@ -340,7 +360,9 @@ public final class DesktopActivity extends Activity {
         }
         runOnUiThread(() -> {
             bootTitle.setText("Ubuntu display timed out");
-            bootStatus.setText("The desktop took too long to start. Tap Restart Ubuntu Desktop to try again.");
+            bootStatus.setText("No desktop display after 120 seconds. Diagnostic output is shown below.");
+            bootProgress.setVisibility(View.GONE);
+            logScroll.setVisibility(View.VISIBLE);
             retryButton.setVisibility(View.VISIBLE);
         });
     }
@@ -377,7 +399,10 @@ public final class DesktopActivity extends Activity {
              GZIPInputStream gz = new GZIPInputStream(raw);
              TarArchiveInputStream tar = new TarArchiveInputStream(gz)) {
             TarArchiveEntry entry; byte[] buf = new byte[65536];
+            int extractedEntries = 0;
             while ((entry = tar.getNextTarEntry()) != null) {
+                extractedEntries++;
+                if (extractedEntries % 150 == 0) updateBootProgress("Step 1/3: Unpacking Ubuntu files (" + extractedEntries + " entries)…");
                 String name = entry.getName().replaceFirst("^\\./", "").replaceAll("/+$", "");
                 if (name.isEmpty()) continue;
                 Path target = base.resolve(name).normalize();
