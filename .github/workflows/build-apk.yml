@@ -92,13 +92,14 @@ jobs:
             index($0, "usr/share/backgrounds/ubuntu-lite/garuda-inspired.svg") { wallpaper=1 }
             index($0, "usr/local/bin/ubuntu-lite-desktop-init.sh") { theme_init=1 }
             index($0, "usr/bin/firefox") || index($0, "usr/lib/firefox/firefox") { firefox=1 }
+            index($0, "usr/bin/soffice") { office=1 }
             index($0, "usr/bin/Xtigervnc") || index($0, "usr/bin/Xvnc") || index($0, "usr/bin/websockify") || index($0, "usr/share/novnc/") { vnc=1 }
             END {
-              if (!marker || !synaptic || !plank || !wallpaper || !theme_init || !firefox || vnc) {
-                print "Rootfs verification failed: marker=" marker ", synaptic=" synaptic ", plank=" plank ", wallpaper=" wallpaper ", theme_init=" theme_init ", firefox=" firefox ", vnc=" vnc > "/dev/stderr"
+              if (!marker || !synaptic || !plank || !wallpaper || !theme_init || !firefox || office || vnc) {
+                print "Rootfs verification failed: marker=" marker ", synaptic=" synaptic ", plank=" plank ", wallpaper=" wallpaper ", theme_init=" theme_init ", firefox=" firefox ", libreoffice=" office ", vnc=" vnc > "/dev/stderr"
                 exit 1
               }
-              print "Verified native-X11 Ubuntu XFCE: desktop, Firefox and theme present; VNC/noVNC components absent."
+              print "Verified native-X11 Ubuntu XFCE: desktop, Firefox and theme present; LibreOffice and VNC/noVNC absent."
             }
           '
 
@@ -107,7 +108,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: app/src/main/assets/ubuntu-rootfs.dat
-          key: ubuntu-preinstalled-rootfs-v2-${{ hashFiles('tools/ubuntu-desktop/Dockerfile') }}
+          key: ubuntu-preinstalled-rootfs-v3-${{ hashFiles('tools/ubuntu-desktop/Dockerfile') }}
 
       - name: Bundle ARM64 PRoot runtime
         run: python3 tools/fetch_native_runtime.py
@@ -143,7 +144,9 @@ jobs:
           ls -lh "$APK"
           unzip -Z1 "$APK" | grep -Fx 'assets/ubuntu-rootfs.dat'
           unzip -Z1 "$APK" | grep -Fx 'assets/ubuntu-desktop-start.sh'
-          unzip -Z1 "$APK" | grep -E '^lib/arm64-v8a/libproot(-loader)?\.so          rootfs_bytes="$(unzip -l "$APK" | awk '$4=="assets/ubuntu-rootfs.dat" {print $1}')"
+          unzip -Z1 "$APK" | grep -E '^lib/arm64-v8a/libproot(-loader)?\.so$'
+          unzip -Z1 "$APK" | grep -Fx 'lib/arm64-v8a/libXlorie.so'
+          rootfs_bytes="$(unzip -l "$APK" | awk '$4=="assets/ubuntu-rootfs.dat" {print $1}')"
           echo "Preinstalled rootfs compressed size in APK: $rootfs_bytes bytes"
           test "$rootfs_bytes" -gt 100000000
           if unzip -p "$APK" assets/ubuntu-rootfs.dat | tar -tzf - | grep -Eq 'usr/bin/Xtigervnc$|usr/bin/Xvnc$|usr/bin/websockify$|usr/share/novnc/'; then
@@ -151,62 +154,6 @@ jobs:
             exit 1
           fi
           echo "APK contains Ubuntu XFCE, Firefox, native X11 renderer and no VNC/noVNC stack."
-
-      - name: Split APK for download
-        shell: bash
-        run: |
-          set -euo pipefail
-          APK=app/build/outputs/apk/debug/app-debug.apk
-          mkdir -p /tmp/ubuntu-apk-parts
-          apk_size="$(stat -c%s "$APK")"
-          chunk_size="$(( (apk_size + 2) / 3 ))"
-          split -b "$chunk_size" -d --additional-suffix=.part "$APK" /tmp/ubuntu-apk-parts/ubuntu-desktop-
-          part_count="$(find /tmp/ubuntu-apk-parts -maxdepth 1 -name 'ubuntu-desktop-*.part' | wc -l)"
-          test "$part_count" -eq 3
-          (cd /tmp/ubuntu-apk-parts && sha256sum ubuntu-desktop-*.part > SHA256SUMS.parts)
-          sha256sum "$APK" | awk '{print $1 "  Ubuntu-Desktop-Android11plus.apk"}' > /tmp/ubuntu-apk-parts/Ubuntu-Desktop-Android11plus.apk.sha256
-          echo "Split installable APK into $part_count downloadable parts."
-          ls -lh /tmp/ubuntu-apk-parts
-
-      - name: Upload APK part 1
-        uses: actions/upload-artifact@v4
-        with:
-          name: Ubuntu-Desktop-APK-Part-1
-          path: /tmp/ubuntu-apk-parts/ubuntu-desktop-00.part
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload APK part 2
-        uses: actions/upload-artifact@v4
-        with:
-          name: Ubuntu-Desktop-APK-Part-2
-          path: /tmp/ubuntu-apk-parts/ubuntu-desktop-01.part
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload APK part 3
-        uses: actions/upload-artifact@v4
-        with:
-          name: Ubuntu-Desktop-APK-Part-3
-          path: /tmp/ubuntu-apk-parts/ubuntu-desktop-02.part
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload APK checksums
-        uses: actions/upload-artifact@v4
-        with:
-          name: Ubuntu-Desktop-APK-Checksums
-          path: |
-            /tmp/ubuntu-apk-parts/SHA256SUMS.parts
-            /tmp/ubuntu-apk-parts/Ubuntu-Desktop-Android11plus.apk.sha256
-          if-no-files-found: error
-          retention-days: 14
-
-          unzip -Z1 "$APK" | grep -Fx 'lib/arm64-v8a/libXlorie.so'
-          rootfs_bytes="$(unzip -l "$APK" | awk '$4=="assets/ubuntu-rootfs.dat" {print $1}')"
-          echo "Preinstalled rootfs compressed size in APK: $rootfs_bytes bytes"
-          test "$rootfs_bytes" -gt 100000000
-          echo "APK contains the preinstalled Ubuntu desktop rootfs (not just Ubuntu Base)."
 
       - name: Split APK for download
         shell: bash
