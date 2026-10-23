@@ -46,7 +46,7 @@ jobs:
           emulator-options: -no-window -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect -memory 4096 -partition-size 8192
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             mkdir -p artifacts/virtual-device
             adb wait-for-device
             adb shell settings put global window_animation_scale 0
