@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       xfce4 xfce4-goodies xfce4-terminal thunar mousepad \
       dbus-x11 dbus-user-session \
       tigervnc-standalone-server tigervnc-common novnc websockify \
-      synaptic plank \
+      synaptic plank pavucontrol \
       ca-certificates curl wget bzip2 xz-utils \
       fonts-dejavu-core fonts-noto-core fonts-noto-color-emoji fonts-liberation2 \
       xdg-utils desktop-file-utils gvfs gvfs-backends \
