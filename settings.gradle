@@ -1,4 +1,12 @@
 pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.PREFER_PROJECT); repositories { google(); mavenCentral(); maven { url "https://jitpack.io" } } }
 rootProject.name = "UbuntuLite"
 include(":app")
+
+def nativeX11Root = file(".native-x11/termux-x11")
+if (nativeX11Root.exists()) {
+    include(":lorie", ":shell-loader", ":shell-loader:stub")
+    project(":lorie").projectDir = file(".native-x11/termux-x11/lorie")
+    project(":shell-loader").projectDir = file("native-x11-support/shell-loader")
+    project(":shell-loader:stub").projectDir = file(".native-x11/termux-x11/shell-loader/stub")
+}
