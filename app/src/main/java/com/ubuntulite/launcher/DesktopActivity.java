@@ -199,7 +199,8 @@ public final class DesktopActivity extends Activity {
         logs.addView(bootLog);
         LinearLayout.LayoutParams logsLp = new LinearLayout.LayoutParams(-1, 0, 1);
         logsLp.topMargin = dp(16);
-        logs.setVisibility(View.GONE); // Keep developer output hidden; users should see a clean launch screen, never terminal logs.\n        bootPanel.addView(logs, logsLp);
+        logs.setVisibility(View.GONE); // Keep developer output hidden; users should see a clean launch screen, never terminal logs.
+        bootPanel.addView(logs, logsLp);
 
         root.addView(bootPanel, new FrameLayout.LayoutParams(-1, -1));
         setContentView(root);
