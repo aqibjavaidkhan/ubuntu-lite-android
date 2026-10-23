@@ -93,7 +93,7 @@ jobs:
           sha256sum Ubuntu-Desktop-Android11plus.apk
 
       - name: Publish installable APK as GitHub Release asset
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ubuntu-desktop-apk-v1
           name: Ubuntu Desktop Android APK
@@ -102,4 +102,6 @@ jobs:
             Approximate size: 603 MiB. Requires several GB of free storage for extraction.
             Build archive and SHA-256 validation performed by GitHub Actions.
             Device runtime testing must still be confirmed on a physical Android device.
+          overwrite_files: true
+          fail_on_unmatched_files: true
           files: Ubuntu-Desktop-Android11plus.apk
