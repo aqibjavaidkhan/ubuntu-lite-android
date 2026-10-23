@@ -141,9 +141,11 @@ jobs:
           set -euo pipefail
           APK=app/build/outputs/apk/debug/app-debug.apk
           mkdir -p /tmp/ubuntu-apk-parts
-          split -b 250M -d --additional-suffix=.part "$APK" /tmp/ubuntu-apk-parts/ubuntu-desktop-
+          apk_size="$(stat -c%s "$APK")"
+          chunk_size="$(( (apk_size + 2) / 3 ))"
+          split -b "$chunk_size" -d --additional-suffix=.part "$APK" /tmp/ubuntu-apk-parts/ubuntu-desktop-
           part_count="$(find /tmp/ubuntu-apk-parts -maxdepth 1 -name 'ubuntu-desktop-*.part' | wc -l)"
-          # Join-and-release currently expects exactly three parts; fail loudly if APK size changes.\n          test "$part_count" -eq 3
+          test "$part_count" -eq 3
           (cd /tmp/ubuntu-apk-parts && sha256sum ubuntu-desktop-*.part > SHA256SUMS.parts)
           sha256sum "$APK" | awk '{print $1 "  Ubuntu-Desktop-Android11plus.apk"}' > /tmp/ubuntu-apk-parts/Ubuntu-Desktop-Android11plus.apk.sha256
           echo "Split installable APK into $part_count downloadable parts."
