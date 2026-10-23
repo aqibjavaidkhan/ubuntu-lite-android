@@ -2,8 +2,6 @@ name: Build preinstalled Ubuntu Desktop APK
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
 
 permissions:
   contents: read
@@ -51,7 +49,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p tools/ubuntu-desktop/prebuilt
-          curl --fail --location --retry 4 --retry-delay 2 --connect-timeout 20             "https://download.mozilla.org/?product=firefox-latest-ssl&os=linux64-aarch64&lang=en-US"             --output /tmp/firefox-archive.tar.bz2
+          curl --fail --location --retry 4 --retry-delay 2 --connect-timeout 20 \
+            "https://download.mozilla.org/?product=firefox-latest-ssl&os=linux64-aarch64&lang=en-US" \
+            --output /tmp/firefox-archive.tar.bz2
           tar -xf /tmp/firefox-archive.tar.bz2 -C tools/ubuntu-desktop/prebuilt
           test -x tools/ubuntu-desktop/prebuilt/firefox/firefox
           rm -f /tmp/firefox-archive.tar.bz2
@@ -141,10 +141,50 @@ jobs:
           test "$rootfs_bytes" -gt 100000000
           echo "APK contains the preinstalled Ubuntu desktop rootfs (not just Ubuntu Base)."
 
-      - name: Upload installable APK
+      - name: Split APK for download
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          mkdir -p /tmp/ubuntu-apk-parts
+          split -b 250M -d --additional-suffix=.part "$APK" /tmp/ubuntu-apk-parts/ubuntu-desktop-
+          part_count="$(find /tmp/ubuntu-apk-parts -maxdepth 1 -name 'ubuntu-desktop-*.part' | wc -l)"
+          test "$part_count" -ge 2
+          (cd /tmp/ubuntu-apk-parts && sha256sum ubuntu-desktop-*.part > SHA256SUMS.parts)
+          sha256sum "$APK" | awk '{print $1 "  Ubuntu-Desktop-Android11plus.apk"}' > /tmp/ubuntu-apk-parts/Ubuntu-Desktop-Android11plus.apk.sha256
+          echo "Split installable APK into $part_count downloadable parts."
+          ls -lh /tmp/ubuntu-apk-parts
+
+      - name: Upload APK part 1
         uses: actions/upload-artifact@v4
         with:
-          name: Ubuntu-Desktop-Preinstalled-ARM64-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: Ubuntu-Desktop-APK-Part-1
+          path: /tmp/ubuntu-apk-parts/ubuntu-desktop-00.part
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload APK part 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ubuntu-Desktop-APK-Part-2
+          path: /tmp/ubuntu-apk-parts/ubuntu-desktop-01.part
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload APK part 3
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ubuntu-Desktop-APK-Part-3
+          path: /tmp/ubuntu-apk-parts/ubuntu-desktop-02.part
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload APK checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ubuntu-Desktop-APK-Checksums
+          path: |
+            /tmp/ubuntu-apk-parts/SHA256SUMS.parts
+            /tmp/ubuntu-apk-parts/Ubuntu-Desktop-Android11plus.apk.sha256
           if-no-files-found: error
           retention-days: 14
