@@ -1,0 +1,2 @@
+// Stub parent project: embed :shell-loader:stub but not the separate companion APK.
+plugins { id 'base' }
