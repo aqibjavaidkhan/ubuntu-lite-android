@@ -10,33 +10,61 @@ permissions:
 jobs:
   join-and-release:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Download artifacts from workflow run
+      - name: Download APK part 1
         uses: actions/download-artifact@v4
         with:
+          repository: ${{ github.repository }}
           run-id: 39875528873
-          name: Ubuntu-Desktop-APK-Part-*
+          name: Ubuntu-Desktop-APK-Part-1
+          path: parts/one
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Concatenate APK parts
+      - name: Download APK part 2
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39875528873
+          name: Ubuntu-Desktop-APK-Part-2
+          path: parts/two
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download APK part 3
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 39875528873
+          name: Ubuntu-Desktop-APK-Part-3
+          path: parts/three
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Join parts and verify APK
+        shell: bash
         run: |
-          ls -la Ubuntu-Desktop-APK-Part-*
-          cat Ubuntu-Desktop-APK-Part-1 Ubuntu-Desktop-APK-Part-2 Ubuntu-Desktop-APK-Part-3 > Ubuntu-Desktop-Android11plus.apk
+          set -euo pipefail
+          find parts -type f -printf '%p %s bytes\n'
+          part1="$(find parts/one -type f -name '*.part' -print -quit)"
+          part2="$(find parts/two -type f -name '*.part' -print -quit)"
+          part3="$(find parts/three -type f -name '*.part' -print -quit)"
+          test -s "$part1"
+          test -s "$part2"
+          test -s "$part3"
+          cat "$part1" "$part2" "$part3" > Ubuntu-Desktop-Android11plus.apk
+          size="$(stat -c %s Ubuntu-Desktop-Android11plus.apk)"
+          echo "Joined APK size: $size bytes"
+          test "$size" -gt 600000000
+          file Ubuntu-Desktop-Android11plus.apk
+          unzip -t Ubuntu-Desktop-Android11plus.apk | tail -2
+          sha256sum Ubuntu-Desktop-Android11plus.apk
 
-      - name: Verify APK size
-        run: |
-          size=$(stat -c %s Ubuntu-Desktop-Android11plus.apk)
-          echo "APK size: $size bytes"
-          if [ "$size" -le 600000000 ]; then
-            echo "APK size is below 600000000 bytes!"
-            exit 1
-          fi
-
-      - name: Verify APK integrity
-        run: unzip -t Ubuntu-Desktop-Android11plus.apk
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+      - name: Publish installable APK as GitHub Release asset
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ubuntu-desktop-apk-v1
+          name: Ubuntu Desktop Android APK
+          body: |
+            Prebuilt ARM64 Ubuntu desktop APK for Android 11+ (no root).
+            Approximate size: 603 MiB. Requires several GB of free storage for extraction.
+            Archive validation is performed by this workflow; device runtime testing is not yet confirmed.
           files: Ubuntu-Desktop-Android11plus.apk
