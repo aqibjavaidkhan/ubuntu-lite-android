@@ -742,10 +742,6 @@ public final class MainActivity extends Activity {
     private void openSettingsPage(String action) {
         try { startActivity(new Intent(action)); } catch (Exception e) { toast("This settings page is not available"); }
     }
-    private void openFiles() {
-        try { Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT); i.setType("*/*"); i.addCategory(Intent.CATEGORY_OPENABLE); startActivity(i); }
-        catch (Exception e) { toast("File picker not available"); }
-    }
     private void openGallery() {
         try { Intent i = new Intent(Intent.ACTION_GET_CONTENT); i.setType("image/*"); startActivity(i); }
         catch (Exception e) { toast("Gallery not available"); }
