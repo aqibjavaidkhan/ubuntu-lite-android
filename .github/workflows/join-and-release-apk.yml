@@ -2,6 +2,18 @@ name: Join and Release APK
 
 on:
   workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: "Successful Build preinstalled Ubuntu Desktop APK run ID"
+        required: true
+        type: string
+  workflow_run:
+    workflows:
+      - Build preinstalled Ubuntu Desktop APK
+    types:
+      - completed
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -9,14 +21,17 @@ permissions:
 
 jobs:
   join-and-release:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    env:
+      BUILD_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.build_run_id || github.event.workflow_run.id }}
     steps:
       - name: Download APK part 1
         uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
-          run-id: 39878861839
+          run-id: ${{ env.BUILD_RUN_ID }}
           name: Ubuntu-Desktop-APK-Part-1
           path: parts/one
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -25,7 +40,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
-          run-id: 39878861839
+          run-id: ${{ env.BUILD_RUN_ID }}
           name: Ubuntu-Desktop-APK-Part-2
           path: parts/two
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -34,28 +49,49 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
-          run-id: 39878861839
+          run-id: ${{ env.BUILD_RUN_ID }}
           name: Ubuntu-Desktop-APK-Part-3
           path: parts/three
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Join parts and verify APK
+      - name: Download APK checksums
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: ${{ env.BUILD_RUN_ID }}
+          name: Ubuntu-Desktop-APK-Checksums
+          path: parts/checksums
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Join APK parts and verify package and checksum
         shell: bash
         run: |
           set -euo pipefail
-          find parts -type f -printf '%p %s bytes\n'
+          find parts -type f -printf '%p %s bytes\\n'
+
           part1="$(find parts/one -type f -name '*.part' -print -quit)"
           part2="$(find parts/two -type f -name '*.part' -print -quit)"
           part3="$(find parts/three -type f -name '*.part' -print -quit)"
+          checksum_file="$(find parts/checksums -type f -name 'Ubuntu-Desktop-Android11plus.apk.sha256' -print -quit)"
+
           test -s "$part1"
           test -s "$part2"
           test -s "$part3"
+          test -s "$checksum_file"
+
           cat "$part1" "$part2" "$part3" > Ubuntu-Desktop-Android11plus.apk
           size="$(stat -c %s Ubuntu-Desktop-Android11plus.apk)"
           echo "Joined APK size: $size bytes"
           test "$size" -gt 600000000
+
           file Ubuntu-Desktop-Android11plus.apk
           unzip -t Ubuntu-Desktop-Android11plus.apk | tail -2
+          unzip -Z1 Ubuntu-Desktop-Android11plus.apk | grep -Fx 'assets/ubuntu-rootfs.dat'
+          unzip -Z1 Ubuntu-Desktop-Android11plus.apk | grep -Fx 'assets/ubuntu-desktop-start.sh'
+          unzip -Z1 Ubuntu-Desktop-Android11plus.apk | grep -E '^lib/arm64-v8a/libproot(-loader)?\\.so$'
+
+          sha256sum --check "$checksum_file"
+          echo "APK archive, bundled Ubuntu rootfs, startup script, native runtime and SHA-256 all verified."
           sha256sum Ubuntu-Desktop-Android11plus.apk
 
       - name: Publish installable APK as GitHub Release asset
@@ -66,5 +102,6 @@ jobs:
           body: |
             Prebuilt ARM64 Ubuntu desktop APK for Android 11+ (no root).
             Approximate size: 603 MiB. Requires several GB of free storage for extraction.
-            Archive validation is performed by this workflow; device runtime testing is not yet confirmed.
+            Build archive and SHA-256 validation performed by GitHub Actions.
+            Device runtime testing must still be confirmed on a physical Android device.
           files: Ubuntu-Desktop-Android11plus.apk
