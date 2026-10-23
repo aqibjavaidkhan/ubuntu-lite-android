@@ -344,6 +344,8 @@ public final class DesktopActivity extends Activity {
         command.add("com.termux.x11.CmdEntryPoint");
         command.add(":0");
         command.add("-legacy-drawing");
+        // Some Android GPU/display combinations swap color channels without this compatibility flag.
+        command.add("-force-bgra");
         command.add("-dpi");
         command.add("180");
         command.add("-ac");
