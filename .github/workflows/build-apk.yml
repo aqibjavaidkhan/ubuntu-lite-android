@@ -75,16 +75,19 @@ jobs:
           ROOTFS=app/src/main/assets/ubuntu-rootfs.dat
           test -s "$ROOTFS"
           tar -tzf "$ROOTFS" | awk '
-            /root\/.ubuntu-preinstalled-desktop-v1$/ { marker=1 }
-            /opt\/firefox\/firefox$/ { firefox=1 }
-            /usr\/bin\/soffice$/ { office=1 }
-            /usr\/sbin\/synaptic$/ { synaptic=1 }
+            /root\\/.ubuntu-preinstalled-desktop-v1$/ { marker=1 }
+            /usr\\/sbin\\/synaptic$/ { synaptic=1 }
+            /usr\\/bin\\/plank$/ { plank=1 }
+            /usr\\/share\\/backgrounds\\/ubuntu-lite\\/garuda-inspired\\.svg$/ { wallpaper=1 }
+            /usr\\/local\\/bin\\/ubuntu-lite-desktop-init\\.sh$/ { theme_init=1 }
+            /opt\\/firefox\\/firefox$/ { firefox=1 }
+            /usr\\/bin\\/soffice$/ { office=1 }
             END {
-              if (!marker || !synaptic) {
-                print "Missing preinstalled Ubuntu desktop file(s): marker=" marker ", synaptic=" synaptic > "/dev/stderr"
+              if (!marker || !synaptic || !plank || !wallpaper || !theme_init || firefox || office) {
+                print "Rootfs verification failed: marker=" marker ", synaptic=" synaptic ", plank=" plank ", wallpaper=" wallpaper ", theme_init=" theme_init ", firefox=" firefox ", libreoffice=" office > "/dev/stderr"
                 exit 1
               }
-              print "Verified lightweight Ubuntu desktop: marker and Synaptic present; Firefox and LibreOffice intentionally excluded."
+              print "Verified lightweight themed Ubuntu XFCE: marker, Synaptic, Plank and wallpaper present; Firefox and LibreOffice absent."
             }
           '
 
