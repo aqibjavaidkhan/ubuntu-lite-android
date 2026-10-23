@@ -43,7 +43,7 @@ jobs:
           arch: arm64-v8a
           profile: pixel_2
           emulator-boot-timeout: 900
-          emulator-options: -no-window -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect -memory 3072 -partition-size 8192
+          emulator-options: -no-window -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect -accel off -memory 3072 -partition-size 8192
           disable-animations: true
           script: |
             set -euo pipefail
