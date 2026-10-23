@@ -16,49 +16,76 @@ concurrency:
 
 jobs:
   emulator-smoke-test:
-    name: Install and launch on ARM64 Android emulator
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 45
+    name: Install, launch, and capture ARM64 Android screen
+    # macos-15 is an Apple Silicon (ARM64) hosted runner, so the ARM64 AVD
+    # and the app's arm64-v8a native libraries use the same CPU architecture.
+    runs-on: macos-15
+    timeout-minutes: 40
     steps:
-      - name: Download latest published native-X11 preview APK
+      - name: Download published native-X11 preview APK
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p artifacts/virtual-device
           curl --fail --location --retry 3 \
             'https://github.com/aqibjavaidkhan/ubuntu-lite-android/releases/download/ubuntu-desktop-native-x11-1c98783/Ubuntu-Desktop-Android11plus.apk' \
             --output /tmp/Ubuntu-Desktop-Android11plus.apk
           test -s /tmp/Ubuntu-Desktop-Android11plus.apk
           ls -lh /tmp/Ubuntu-Desktop-Android11plus.apk
-          sha256sum /tmp/Ubuntu-Desktop-Android11plus.apk
+          shasum -a 256 /tmp/Ubuntu-Desktop-Android11plus.apk | tee artifacts/virtual-device/apk-sha256.txt
 
-      - name: Boot ARM64 Android virtual device and smoke-test app
+      - name: Boot Android 11 ARM64 virtual device and smoke-test app
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 30
+          system-image-api-level: 30
           target: google_apis
           arch: arm64-v8a
           profile: pixel_2
-          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -memory 4096 -partition-size 8192
+          emulator-boot-timeout: 900
+          emulator-options: -no-window -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect -memory 3072 -partition-size 8192
           disable-animations: true
           script: |
             set -euo pipefail
+            mkdir -p artifacts/virtual-device
             adb wait-for-device
             adb shell settings put global window_animation_scale 0
             adb shell settings put global transition_animation_scale 0
             adb shell settings put global animator_duration_scale 0
+
+            PACKAGE='com.ubuntulite.desktop'
+            echo "Checking emulator and APK package ID..."
+            adb shell getprop ro.build.version.release | tr -d '\r' | tee artifacts/virtual-device/android-version.txt
             adb install -r /tmp/Ubuntu-Desktop-Android11plus.apk
-            PACKAGE="$(adb shell dumpsys package packages | grep -o 'com\\.ubuntulite\\.launcher' | head -n 1 || true)"
-            if [ -z "$PACKAGE" ]; then
-              echo "Could not identify launcher package after installation." >&2
-              adb shell pm list packages | grep -i ubuntu || true
-              exit 1
-            fi
+            adb shell pm list packages | grep -Fx "package:$PACKAGE"
+            adb shell appops set "$PACKAGE" MANAGE_EXTERNAL_STORAGE allow || true
+
+            echo "Launching Ubuntu Desktop..."
             adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1
-            sleep 20
-            adb logcat -d -t 12000 > /tmp/ubuntu-lite-logcat.txt
-            if grep -E 'FATAL EXCEPTION|Fatal signal|Process .* has died' /tmp/ubuntu-lite-logcat.txt; then
-              echo "Crash-like log entries found; inspect log output above." >&2
+            sleep 45
+
+            adb shell dumpsys activity activities > artifacts/virtual-device/activities.txt
+            adb logcat -d -t 20000 > artifacts/virtual-device/logcat.txt
+            adb exec-out screencap -p > artifacts/virtual-device/ubuntu-desktop-screen.png
+            test -s artifacts/virtual-device/ubuntu-desktop-screen.png
+
+            echo "Top/resumed activity:"
+            grep -E 'mResumedActivity|topResumedActivity' artifacts/virtual-device/activities.txt || true
+            if ! grep -F "$PACKAGE" artifacts/virtual-device/activities.txt; then
+              echo "Ubuntu package was not found in the active activity dump." >&2
               exit 1
             fi
-            adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' || true
-            echo "Install-and-launch smoke test completed. This does not prove the full Linux desktop, networking, audio, Bluetooth, or display rendering works."
+            if grep -E 'FATAL EXCEPTION|Fatal signal' artifacts/virtual-device/logcat.txt; then
+              echo "Fatal error signature detected in emulator logcat." >&2
+              exit 1
+            fi
+            echo "Install-and-launch smoke test passed. The saved screenshot still requires visual review; full Linux desktop rendering, network, audio, and Bluetooth are not certified by this test."
+
+      - name: Upload virtual-device screenshot and diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ubuntu-desktop-virtual-device-evidence
+          path: artifacts/virtual-device/
+          if-no-files-found: warn
+          retention-days: 7
