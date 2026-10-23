@@ -1,10 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <application android:theme="@style/AppTheme" android:label="Ubuntu Desktop" android:icon="@drawable/ic_launcher" android:roundIcon="@drawable/ic_launcher" android:allowBackup="false" android:supportsRtl="true" android:usesCleartextTraffic="true" android:hardwareAccelerated="true">
+    <application android:name="com.termux.x11.LorieApp" android:theme="@style/AppTheme" android:label="Ubuntu Desktop" android:icon="@drawable/ic_launcher" android:roundIcon="@drawable/ic_launcher" android:allowBackup="false" android:supportsRtl="true" android:usesCleartextTraffic="true" android:hardwareAccelerated="true">
         <activity android:name=".DesktopActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
             <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <!-- Keep native renderer explicitly launchable without a duplicate launcher icon. -->
+        <activity android:name="com.termux.x11.MainActivity">
+            <intent-filter tools:node="remove">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
