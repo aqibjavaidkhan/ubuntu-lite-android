@@ -88,6 +88,80 @@ jobs:
           unzip -Z1 Ubuntu-Desktop-Android11plus.apk | grep -Fx 'assets/ubuntu-desktop-start.sh'
           unzip -Z1 Ubuntu-Desktop-Android11plus.apk | grep -E '^lib/arm64-v8a/libproot(-loader)?\.so$'
 
+          unzip -p Ubuntu-Desktop-Android11plus.apk assets/ubuntu-rootfs.dat | tar -tzf - > rootfs-files.txt
+          grep -E '(^|/)usr/share/backgrounds/ubuntu-lite/garuda-inspired\.svg
+          echo "APK archive, bundled Ubuntu rootfs, startup script, native runtime and SHA-256 all verified."
+          sha256sum Ubuntu-Desktop-Android11plus.apk
+
+      - name: Publish installable APK as GitHub Release asset
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ubuntu-desktop-apk-v1
+          name: Ubuntu Desktop Android APK
+          body: |
+            Prebuilt ARM64 Ubuntu desktop APK for Android 11+ (no root).
+            Size depends on the included desktop components. Requires several GB of free storage for extraction.
+            Build archive and SHA-256 validation performed by GitHub Actions.
+            Device runtime testing must still be confirmed on a physical Android device.
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          files: Ubuntu-Desktop-Android11plus.apk
+ rootfs-files.txt
+          grep -E '(^|/)usr/local/bin/ubuntu-lite-desktop-init\.sh
+          echo "APK archive, bundled Ubuntu rootfs, startup script, native runtime and SHA-256 all verified."
+          sha256sum Ubuntu-Desktop-Android11plus.apk
+
+      - name: Publish installable APK as GitHub Release asset
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ubuntu-desktop-apk-v1
+          name: Ubuntu Desktop Android APK
+          body: |
+            Prebuilt ARM64 Ubuntu desktop APK for Android 11+ (no root).
+            Size depends on the included desktop components. Requires several GB of free storage for extraction.
+            Build archive and SHA-256 validation performed by GitHub Actions.
+            Device runtime testing must still be confirmed on a physical Android device.
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          files: Ubuntu-Desktop-Android11plus.apk
+ rootfs-files.txt
+          ! grep -E '(^|/)opt/firefox/firefox
+          echo "APK archive, bundled Ubuntu rootfs, startup script, native runtime and SHA-256 all verified."
+          sha256sum Ubuntu-Desktop-Android11plus.apk
+
+      - name: Publish installable APK as GitHub Release asset
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ubuntu-desktop-apk-v1
+          name: Ubuntu Desktop Android APK
+          body: |
+            Prebuilt ARM64 Ubuntu desktop APK for Android 11+ (no root).
+            Size depends on the included desktop components. Requires several GB of free storage for extraction.
+            Build archive and SHA-256 validation performed by GitHub Actions.
+            Device runtime testing must still be confirmed on a physical Android device.
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          files: Ubuntu-Desktop-Android11plus.apk
+ rootfs-files.txt
+          ! grep -E '(^|/)usr/bin/soffice
+          echo "APK archive, bundled Ubuntu rootfs, startup script, native runtime and SHA-256 all verified."
+          sha256sum Ubuntu-Desktop-Android11plus.apk
+
+      - name: Publish installable APK as GitHub Release asset
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ubuntu-desktop-apk-v1
+          name: Ubuntu Desktop Android APK
+          body: |
+            Prebuilt ARM64 Ubuntu desktop APK for Android 11+ (no root).
+            Size depends on the included desktop components. Requires several GB of free storage for extraction.
+            Build archive and SHA-256 validation performed by GitHub Actions.
+            Device runtime testing must still be confirmed on a physical Android device.
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          files: Ubuntu-Desktop-Android11plus.apk
+ rootfs-files.txt
+
           sha256sum --check "$checksum_file"
           echo "APK archive, bundled Ubuntu rootfs, startup script, native runtime and SHA-256 all verified."
           sha256sum Ubuntu-Desktop-Android11plus.apk
