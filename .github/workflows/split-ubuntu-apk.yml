@@ -1,0 +1,72 @@
+name: Split verified Ubuntu Desktop APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  split-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download previously verified full Ubuntu APK
+        uses: actions/download-artifact@v4
+        with:
+          name: Ubuntu-Desktop-Preinstalled-ARM64-APK
+          path: /tmp/ubuntu-apk
+          repository: ${{ github.repository }}
+          run-id: 39873155538
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Split APK into download-sized parts
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/ubuntu-apk/app-debug.apk
+          test -s "$APK"
+          mkdir -p /tmp/ubuntu-apk-parts
+          sha256sum "$APK" | awk '{print $1 "  Ubuntu-Desktop-Android11plus.apk"}' > /tmp/ubuntu-apk-parts/Ubuntu-Desktop-Android11plus.apk.sha256
+          split -b 250M -d --additional-suffix=.part "$APK" /tmp/ubuntu-apk-parts/ubuntu-desktop-
+          (cd /tmp/ubuntu-apk-parts && sha256sum ubuntu-desktop-*.part > SHA256SUMS.parts)
+          test -s /tmp/ubuntu-apk-parts/ubuntu-desktop-00.part
+          test -s /tmp/ubuntu-apk-parts/ubuntu-desktop-01.part
+          test -s /tmp/ubuntu-apk-parts/ubuntu-desktop-02.part
+          echo "Successfully split verified APK:"
+          ls -lh /tmp/ubuntu-apk-parts
+
+      - name: Upload APK part 1
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ubuntu-Desktop-APK-Part-1
+          path: /tmp/ubuntu-apk-parts/ubuntu-desktop-00.part
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload APK part 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ubuntu-Desktop-APK-Part-2
+          path: /tmp/ubuntu-apk-parts/ubuntu-desktop-01.part
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload APK part 3
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ubuntu-Desktop-APK-Part-3
+          path: /tmp/ubuntu-apk-parts/ubuntu-desktop-02.part
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload APK checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ubuntu-Desktop-APK-Checksums
+          path: |
+            /tmp/ubuntu-apk-parts/SHA256SUMS.parts
+            /tmp/ubuntu-apk-parts/Ubuntu-Desktop-Android11plus.apk.sha256
+          if-no-files-found: error
+          retention-days: 14
