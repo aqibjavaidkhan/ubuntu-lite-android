@@ -83,7 +83,85 @@ jobs:
           unzip -t Ubuntu-Desktop-Android11plus.apk | tail -2
           unzip -Z1 Ubuntu-Desktop-Android11plus.apk | grep -Fx 'assets/ubuntu-rootfs.dat'
           unzip -Z1 Ubuntu-Desktop-Android11plus.apk | grep -Fx 'assets/ubuntu-desktop-start.sh'
-          unzip -Z1 Ubuntu-Desktop-Android11plus.apk | grep -E '^lib/arm64-v8a/libproot(-loader)?[.]so$'
+          unzip -Z1 Ubuntu-Desktop-Android11plus.apk | grep -E '^lib/arm64-v8a/libproot(-loader)?[.]so
+          unzip -p Ubuntu-Desktop-Android11plus.apk assets/ubuntu-rootfs.dat | tar -tzf - > rootfs-files.txt
+          grep -E 'usr/share/backgrounds/ubuntu-lite/garuda-inspired[.]svg$' rootfs-files.txt
+          grep -E 'usr/local/bin/ubuntu-lite-desktop-init[.]sh$' rootfs-files.txt
+          if grep -Eq 'usr/bin/soffice$' rootfs-files.txt; then
+            echo "LibreOffice must remain excluded until desktop startup is stable." >&2
+            exit 1
+          fi
+          sha256sum --check "$checksum_file"
+          grep -E 'usr/bin/firefox$|usr/lib/firefox/firefox
+          sha256sum Ubuntu-Desktop-Android11plus.apk
+
+      - name: Publish installable APK as GitHub Release asset
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ubuntu-desktop-apk-v1
+          name: Ubuntu Desktop Android APK
+          body: |
+            Prebuilt ARM64 Ubuntu desktop APK for Android 11+ (no root).
+            Size depends on the included desktop components. Requires several GB of free storage for extraction.
+            Build archive and SHA-256 validation performed by GitHub Actions.
+            Device runtime testing must still be confirmed on a physical Android device.
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          files: Ubuntu-Desktop-Android11plus.apk
+
+          unzip -Z1 Ubuntu-Desktop-Android11plus.apk | grep -Fx 'lib/arm64-v8a/libXlorie.so'
+
+          unzip -p Ubuntu-Desktop-Android11plus.apk assets/ubuntu-rootfs.dat | tar -tzf - > rootfs-files.txt
+          grep -E 'usr/share/backgrounds/ubuntu-lite/garuda-inspired[.]svg$' rootfs-files.txt
+          grep -E 'usr/local/bin/ubuntu-lite-desktop-init[.]sh$' rootfs-files.txt
+          if grep -Eq 'opt/firefox/firefox$' rootfs-files.txt; then
+            echo "Firefox must remain excluded until desktop startup is stable." >&2
+            exit 1
+          fi
+          if grep -Eq 'usr/bin/soffice$' rootfs-files.txt; then
+            echo "LibreOffice must remain excluded until desktop startup is stable." >&2
+            exit 1
+          fi
+          sha256sum --check "$checksum_file"
+          echo "APK archive, bundled Ubuntu rootfs, startup script, theme, native runtime and SHA-256 verified."
+          sha256sum Ubuntu-Desktop-Android11plus.apk
+
+      - name: Publish installable APK as GitHub Release asset
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ubuntu-desktop-apk-v1
+          name: Ubuntu Desktop Android APK
+          body: |
+            Prebuilt ARM64 Ubuntu desktop APK for Android 11+ (no root).
+            Size depends on the included desktop components. Requires several GB of free storage for extraction.
+            Build archive and SHA-256 validation performed by GitHub Actions.
+            Device runtime testing must still be confirmed on a physical Android device.
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          files: Ubuntu-Desktop-Android11plus.apk
+ rootfs-files.txt
+          if grep -Eq 'usr/bin/Xtigervnc$|usr/bin/Xvnc$|usr/bin/websockify$|usr/share/novnc/' rootfs-files.txt; then
+            echo "VNC/noVNC stack must not be included." >&2
+            exit 1
+          fi
+          echo "Native X11 library, Firefox, Ubuntu rootfs and SHA-256 verified."
+          sha256sum Ubuntu-Desktop-Android11plus.apk
+
+      - name: Publish installable APK as GitHub Release asset
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ubuntu-desktop-apk-v1
+          name: Ubuntu Desktop Android APK
+          body: |
+            Prebuilt ARM64 Ubuntu desktop APK for Android 11+ (no root).
+            Size depends on the included desktop components. Requires several GB of free storage for extraction.
+            Build archive and SHA-256 validation performed by GitHub Actions.
+            Device runtime testing must still be confirmed on a physical Android device.
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          files: Ubuntu-Desktop-Android11plus.apk
+
+          unzip -Z1 Ubuntu-Desktop-Android11plus.apk | grep -Fx 'lib/arm64-v8a/libXlorie.so'
 
           unzip -p Ubuntu-Desktop-Android11plus.apk assets/ubuntu-rootfs.dat | tar -tzf - > rootfs-files.txt
           grep -E 'usr/share/backgrounds/ubuntu-lite/garuda-inspired[.]svg$' rootfs-files.txt
