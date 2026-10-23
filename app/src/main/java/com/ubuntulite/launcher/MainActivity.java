@@ -1,6 +1,7 @@
 package com.ubuntulite.launcher;
 
 import android.app.Activity;
+import android.bluetooth.BluetoothAdapter;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Color;
@@ -9,10 +10,15 @@ import android.graphics.drawable.GradientDrawable;
 import android.net.ConnectivityManager;
 import android.net.LinkProperties;
 import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.media.AudioManager;
 import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Environment;
 import android.os.Bundle;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+import android.os.VibratorManager;
 import android.provider.Settings;
 import android.text.InputType;
 import android.text.TextWatcher;
@@ -70,7 +76,8 @@ public final class MainActivity extends Activity {
     private final Object rootfsLock = new Object();
     private FrameLayout root;
     private LinearLayout homePage, drawerPage, terminalPage, quickPanel;
-    private TextView terminalOutput, terminalState, clockText;
+    private TextView terminalOutput, terminalState, clockText, quickSystemStatus;
+    private AudioManager audioManager;
     private EditText commandInput, appSearch, storeSearch;
     private Button terminalStart, runButton;
     private Process shell;
@@ -86,6 +93,7 @@ public final class MainActivity extends Activity {
         getWindow().setStatusBarColor(BG_DARK);
         getWindow().setNavigationBarColor(BG_DARK);
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+        audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
         rootfs = new File(getFilesDir(), "ubuntu-rootfs");
         root = new FrameLayout(this);
         root.setBackgroundColor(BG);
@@ -541,31 +549,166 @@ public final class MainActivity extends Activity {
     private void showQuickPanel() {
         if (quickShowing) return;
         quickShowing = true;
-        quickPanel = column(); quickPanel.setPadding(dp(18), dp(18), dp(18), dp(20));
+        quickPanel = column();
+        quickPanel.setPadding(dp(16), dp(16), dp(16), dp(16));
         quickPanel.setBackground(shape(Color.rgb(37, 28, 46), 27));
-        TextView close = text("Quick settings     ⌄", 20, FG); close.setPadding(0, 0, 0, dp(9));
+
+        TextView close = text("Quick controls     ⌄", 20, FG);
+        close.setPadding(0, 0, 0, dp(5));
         quickPanel.addView(close);
         quickPanel.addView(text(new SimpleDateFormat("EEEE, d MMMM", Locale.getDefault()).format(new Date()), 13, MUTED));
-        LinearLayout toggles = row(); toggles.setPadding(0, dp(13), 0, dp(7));
-        addQuickButton(toggles, "⌁", "Wi-Fi", () -> openSettingsPage(Settings.ACTION_WIFI_SETTINGS));
-        addQuickButton(toggles, "ᛒ", "Bluetooth", () -> openSettingsPage(Settings.ACTION_BLUETOOTH_SETTINGS));
-        addQuickButton(toggles, "◉", "Display", () -> openSettingsPage(Settings.ACTION_DISPLAY_SETTINGS));
-        addQuickButton(toggles, "⚙", "Settings", () -> launchSettings());
-        quickPanel.addView(toggles);
-        quickPanel.addView(text("Brightness", 13, FG));
-        SeekBar seek = new SeekBar(this); seek.setMax(100); seek.setProgress(80); quickPanel.addView(seek);
-        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+
+        quickSystemStatus = text("", 12, MUTED);
+        quickSystemStatus.setPadding(0, dp(7), 0, dp(3));
+        quickPanel.addView(quickSystemStatus);
+        refreshQuickSystemStatus();
+
+        LinearLayout networkControls = row();
+        networkControls.setPadding(0, dp(9), 0, dp(5));
+        addQuickButton(networkControls, "⌁", "Wi-Fi", this::openInternetSettings);
+        addQuickButton(networkControls, "ᛒ", "Bluetooth", () -> openSettingsPage(Settings.ACTION_BLUETOOTH_SETTINGS));
+        quickPanel.addView(networkControls);
+
+        LinearLayout deviceControls = row();
+        deviceControls.setPadding(0, dp(4), 0, dp(8));
+        addQuickButton(deviceControls, "◖", "Sound", () -> openSettingsPage(Settings.ACTION_SOUND_SETTINGS));
+        addQuickButton(deviceControls, "∿", "Vibration", () -> openSettingsPage(Settings.ACTION_SOUND_SETTINGS));
+        quickPanel.addView(deviceControls);
+
+        Button testHaptics = new Button(this);
+        testHaptics.setText("Test vibration motor");
+        testHaptics.setAllCaps(false);
+        testHaptics.setOnClickListener(v -> testHaptics());
+        quickPanel.addView(testHaptics, new LinearLayout.LayoutParams(-1, dp(42)));
+
+        TextView brightnessLabel = text("App brightness", 13, FG);
+        brightnessLabel.setPadding(0, dp(8), 0, 0);
+        quickPanel.addView(brightnessLabel);
+        SeekBar brightness = new SeekBar(this);
+        brightness.setMax(100);
+        float currentBrightness = getWindow().getAttributes().screenBrightness;
+        brightness.setProgress(currentBrightness < 0 ? 75 : Math.max(5, Math.min(100, (int) (currentBrightness * 100))));
+        quickPanel.addView(brightness);
+        brightness.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             public void onProgressChanged(SeekBar s, int progress, boolean fromUser) {
-                if (fromUser) { WindowManager.LayoutParams lp = getWindow().getAttributes(); lp.screenBrightness = Math.max(.05f, progress / 100f); getWindow().setAttributes(lp); }
+                if (fromUser) {
+                    WindowManager.LayoutParams lp = getWindow().getAttributes();
+                    lp.screenBrightness = Math.max(.05f, progress / 100f);
+                    getWindow().setAttributes(lp);
+                }
             }
             public void onStartTrackingTouch(SeekBar s) {}
             public void onStopTrackingTouch(SeekBar s) {}
         });
-        Button done = new Button(this); done.setText("Done"); done.setAllCaps(false);
-        done.setOnClickListener(v -> hideQuickPanel()); quickPanel.addView(done);
-        FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(-1, -2, Gravity.TOP);
-        p.setMargins(dp(8), dp(8), dp(8), 0); root.addView(quickPanel, p);
+
+        TextView volumeLabel = text("Media volume", 13, FG);
+        volumeLabel.setPadding(0, dp(7), 0, 0);
+        quickPanel.addView(volumeLabel);
+        LinearLayout volumeControls = row();
+        SeekBar volume = new SeekBar(this);
+        int maxVolume = audioManager == null ? 15 : Math.max(1, audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC));
+        volume.setMax(maxVolume);
+        volume.setProgress(audioManager == null ? maxVolume / 2 : audioManager.getStreamVolume(AudioManager.STREAM_MUSIC));
+        volumeControls.addView(volume, new LinearLayout.LayoutParams(0, dp(42), 1));
+
+        Button mute = new Button(this);
+        mute.setAllCaps(false);
+        mute.setText(audioManager != null && audioManager.isStreamMute(AudioManager.STREAM_MUSIC) ? "Unmute" : "Mute");
+        volumeControls.addView(mute, new LinearLayout.LayoutParams(dp(82), dp(42)));
+        volume.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            public void onProgressChanged(SeekBar s, int progress, boolean fromUser) {
+                if (fromUser && audioManager != null) {
+                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, progress, AudioManager.FLAG_SHOW_UI);
+                    if (audioManager.isStreamMute(AudioManager.STREAM_MUSIC)) {
+                        audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0);
+                    }
+                    mute.setText(audioManager.isStreamMute(AudioManager.STREAM_MUSIC) ? "Unmute" : "Mute");
+                }
+            }
+            public void onStartTrackingTouch(SeekBar s) {}
+            public void onStopTrackingTouch(SeekBar s) {}
+        });
+        mute.setOnClickListener(v -> {
+            if (audioManager == null) return;
+            boolean wasMuted = audioManager.isStreamMute(AudioManager.STREAM_MUSIC);
+            audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC,
+                    wasMuted ? AudioManager.ADJUST_UNMUTE : AudioManager.ADJUST_MUTE,
+                    AudioManager.FLAG_SHOW_UI);
+            mute.setText(wasMuted ? "Mute" : "Unmute");
+        });
+        quickPanel.addView(volumeControls);
+
+        Button done = new Button(this);
+        done.setText("Done");
+        done.setAllCaps(false);
+        done.setOnClickListener(v -> hideQuickPanel());
+        LinearLayout.LayoutParams doneLp = new LinearLayout.LayoutParams(-1, dp(42));
+        doneLp.topMargin = dp(7);
+        quickPanel.addView(done, doneLp);
+
+        ScrollView panelScroll = new ScrollView(this);
+        panelScroll.setFillViewport(false);
+        // A scroll container keeps the controls accessible on smaller phones and landscape.
+        panelScroll.addView(quickPanel);
+        FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(-1, Math.min((int) (getResources().getDisplayMetrics().heightPixels * 0.92f), dp(650)), Gravity.TOP);
+        p.setMargins(dp(8), dp(8), dp(8), 0);
+        root.addView(panelScroll, p);
         close.setOnClickListener(v -> hideQuickPanel());
+        quickPanel.setTag(panelScroll);
+    }
+
+    private void openInternetSettings() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startActivity(new Intent(Settings.Panel.ACTION_INTERNET_CONNECTIVITY));
+            } else {
+                startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS));
+            }
+        } catch (Exception e) {
+            openSettingsPage(Settings.ACTION_WIFI_SETTINGS);
+        }
+    }
+
+    private void testHaptics() {
+        try {
+            Vibrator vibrator;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                VibratorManager manager = (VibratorManager) getSystemService(VIBRATOR_MANAGER_SERVICE);
+                vibrator = manager == null ? null : manager.getDefaultVibrator();
+            } else {
+                vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
+            }
+            if (vibrator == null || !vibrator.hasVibrator()) {
+                toast("No vibration motor is available on this device");
+                return;
+            }
+            vibrator.vibrate(VibrationEffect.createOneShot(70, VibrationEffect.DEFAULT_AMPLITUDE));
+        } catch (Exception e) {
+            toast("Vibration test is unavailable: " + e.getMessage());
+        }
+    }
+
+    private void refreshQuickSystemStatus() {
+        if (quickSystemStatus == null) return;
+        String network = "Network unavailable";
+        try {
+            ConnectivityManager manager = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+            Network active = manager == null ? null : manager.getActiveNetwork();
+            NetworkCapabilities caps = manager == null || active == null ? null : manager.getNetworkCapabilities(active);
+            if (caps != null) {
+                String transport = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ? "Wi-Fi"
+                        : caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ? "Mobile data"
+                        : caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) ? "Ethernet" : "Network";
+                if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) network = transport + " · internet available";
+                else if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) network = transport + " · no internet validation";
+                else network = transport + " · local connection";
+            } else {
+                network = "Offline";
+            }
+        } catch (Exception ignored) { network = "Network status unavailable"; }
+        int current = audioManager == null ? 0 : audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+        int max = audioManager == null ? 0 : audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+        quickSystemStatus.setText(network + "  ·  Media volume " + current + "/" + max);
     }
     private void addQuickButton(LinearLayout parent, String icon, String label, Runnable action) {
         LinearLayout tile = column(); tile.setGravity(Gravity.CENTER); tile.setPadding(dp(3), dp(8), dp(3), dp(8));
@@ -579,7 +722,15 @@ public final class MainActivity extends Activity {
     private void hideQuickPanel() {
         if (!quickShowing) return;
         quickShowing = false;
-        if (quickPanel != null && quickPanel.getParent() != null) ((android.view.ViewGroup)quickPanel.getParent()).removeView(quickPanel);
+        if (quickPanel != null) {
+            Object tag = quickPanel.getTag();
+            if (tag instanceof ScrollView && ((ScrollView) tag).getParent() != null) {
+                ((android.view.ViewGroup) ((ScrollView) tag).getParent()).removeView((ScrollView) tag);
+            } else if (quickPanel.getParent() != null) {
+                ((android.view.ViewGroup) quickPanel.getParent()).removeView(quickPanel);
+            }
+        }
+        quickSystemStatus = null;
     }
 
     private void startUbuntu() {
@@ -737,6 +888,11 @@ public final class MainActivity extends Activity {
         }
         try { Files.deleteIfExists(f.toPath()); } catch (Exception ignored) {}
     }
+    @Override protected void onResume() {
+        super.onResume();
+        refreshQuickSystemStatus();
+    }
+
     private void launchUrl(String url) { try { startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))); } catch (Exception e) { toast("No browser available"); } }
     private void launchSettings() { openSettingsPage(Settings.ACTION_SETTINGS); }
     private void openSettingsPage(String action) {
