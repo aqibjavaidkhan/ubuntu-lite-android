@@ -78,7 +78,7 @@ public final class DesktopActivity extends Activity {
         prootTmp.setExecutable(true, true);
         buildScreen();
 
-        showBoot("Restoring preinstalled Ubuntu", "Unpacking the complete Ubuntu desktop already included in this APK. No package downloads are needed.");
+        showBoot("Preparing your Ubuntu desktop", "First launch prepares the desktop already included in the app. Please keep the app open.");
         appendLog("Ubuntu Desktop is bundled inside this APK; first launch only extracts it into app storage.");
         startDesktopSession();
     }
@@ -184,7 +184,7 @@ public final class DesktopActivity extends Activity {
         retryLp.topMargin = dp(8);
         bootPanel.addView(retryButton, retryLp);
 
-        TextView details = label("Ubuntu XFCE, Firefox, LibreOffice and Synaptic are preinstalled inside this APK. No package downloads are required on first launch; the app only unpacks the included desktop image, so keep several GB of free storage.", 13, MUTED);
+        TextView details = label("Ubuntu desktop, Firefox and LibreOffice are included in the app. First launch prepares the included files; later launches can start directly into the desktop.", 13, MUTED);
         details.setGravity(Gravity.TOP);
         LinearLayout.LayoutParams detailsLp = new LinearLayout.LayoutParams(-1, -2);
         detailsLp.topMargin = dp(14);
@@ -199,7 +199,7 @@ public final class DesktopActivity extends Activity {
         logs.addView(bootLog);
         LinearLayout.LayoutParams logsLp = new LinearLayout.LayoutParams(-1, 0, 1);
         logsLp.topMargin = dp(16);
-        bootPanel.addView(logs, logsLp);
+        logs.setVisibility(View.GONE); // Keep developer output hidden; users should see a clean launch screen, never terminal logs.\n        bootPanel.addView(logs, logsLp);
 
         root.addView(bootPanel, new FrameLayout.LayoutParams(-1, -1));
         setContentView(root);
@@ -257,7 +257,7 @@ public final class DesktopActivity extends Activity {
                 appendLog("DESKTOP START FAILED: " + e.getMessage());
                 runOnUiThread(() -> {
                     bootTitle.setText("Ubuntu desktop did not start");
-                    bootStatus.setText("See the log below and retry.");
+                    bootStatus.setText("Ubuntu could not start. Tap Restart Ubuntu Desktop to try again.");
                     retryButton.setVisibility(View.VISIBLE);
                 });
             }
@@ -307,7 +307,7 @@ public final class DesktopActivity extends Activity {
                 appendLog("Desktop process exited before the embedded display became ready.");
                 runOnUiThread(() -> {
                     bootTitle.setText("Ubuntu desktop failed to start");
-                    bootStatus.setText("Check the terminal log, then retry.");
+                    bootStatus.setText("Ubuntu could not start. Tap Restart Ubuntu Desktop to try again.");
                     installButton.setVisibility(View.VISIBLE);
                     installButton.setText("Retry setup");
                     installButton.setEnabled(true);
@@ -328,7 +328,7 @@ public final class DesktopActivity extends Activity {
         }
         runOnUiThread(() -> {
             bootTitle.setText("Ubuntu display timed out");
-            bootStatus.setText("noVNC did not start in time. The error log is available below.");
+            bootStatus.setText("The desktop took too long to start. Tap Restart Ubuntu Desktop to try again.");
             retryButton.setVisibility(View.VISIBLE);
         });
     }
