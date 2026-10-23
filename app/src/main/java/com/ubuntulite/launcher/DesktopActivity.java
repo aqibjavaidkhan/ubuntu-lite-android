@@ -2,6 +2,7 @@ package com.ubuntulite.launcher;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -62,7 +63,9 @@ public final class DesktopActivity extends Activity {
     private ScrollView logScroll;
     private Button installButton, retryButton, keyboardButton;
     private Process desktopProcess;
-    private File rootfs, prootTmp;
+    private Process nativeX11Process;
+    private File rootfs, prootTmp, x11Tmp;
+    private volatile boolean desktopReady;
     private volatile boolean shuttingDown;
 
     @Override public void onCreate(Bundle state) {
@@ -75,7 +78,12 @@ public final class DesktopActivity extends Activity {
 
         rootfs = new File(getFilesDir(), "ubuntu-rootfs");
         prootTmp = new File(getFilesDir(), "proot-tmp");
+        x11Tmp = new File(getFilesDir(), "x11-shared-tmp");
         prootTmp.mkdirs();
+        x11Tmp.mkdirs();
+        x11Tmp.setReadable(true, true);
+        x11Tmp.setWritable(true, true);
+        x11Tmp.setExecutable(true, true);
         prootTmp.setReadable(true, true);
         prootTmp.setWritable(true, true);
         prootTmp.setExecutable(true, true);
@@ -115,34 +123,6 @@ public final class DesktopActivity extends Activity {
     private void buildScreen() {
         root = new FrameLayout(this);
         root.setBackgroundColor(BG);
-
-        desktopView = new WebView(this);
-        desktopView.setBackgroundColor(Color.BLACK);
-        WebSettings s = desktopView.getSettings();
-        s.setJavaScriptEnabled(true);
-        s.setDomStorageEnabled(true);
-        s.setDatabaseEnabled(true);
-        s.setAllowFileAccess(false);
-        s.setAllowContentAccess(false);
-        s.setSupportZoom(false);
-        s.setBuiltInZoomControls(false);
-        s.setMediaPlaybackRequiresUserGesture(false);
-        s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        desktopView.setWebChromeClient(new WebChromeClient());
-        desktopView.setWebViewClient(new WebViewClient() {
-            @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
-                Uri u = req.getUrl();
-                if ("http".equals(u.getScheme()) && "127.0.0.1".equals(u.getHost())) return false;
-                return true;
-            }
-            @Override public void onReceivedError(WebView view, WebResourceRequest req,
-                                                   android.webkit.WebResourceError error) {
-                if (req.isForMainFrame()) {
-                    showBoot("Ubuntu display error", error.getDescription().toString());
-                }
-            }
-        });
-        root.addView(desktopView, new FrameLayout.LayoutParams(-1, -1));
 
         bootPanel = vertical();
         bootPanel.setPadding(dp(24), dp(22), dp(24), dp(20));
@@ -193,7 +173,7 @@ public final class DesktopActivity extends Activity {
         retryLp.topMargin = dp(8);
         bootPanel.addView(retryButton, retryLp);
 
-        TextView details = label("Lightweight Ubuntu XFCE desktop. Firefox and LibreOffice are temporarily excluded until startup is stable; install them later through Ubuntu package tools.", 13, MUTED);
+        TextView details = label("Native high-resolution X11 · Firefox · Python/Git tools · Touch-ready XFCE", 13, MUTED);
         details.setGravity(Gravity.TOP);
         LinearLayout.LayoutParams detailsLp = new LinearLayout.LayoutParams(-1, -2);
         detailsLp.topMargin = dp(14);
@@ -213,24 +193,6 @@ public final class DesktopActivity extends Activity {
 
         root.addView(bootPanel, new FrameLayout.LayoutParams(-1, -1));
 
-        // Touch-first floating control for the Android on-screen keyboard.
-        keyboardButton = new Button(this);
-        keyboardButton.setText("⌨  Keyboard");
-        keyboardButton.setAllCaps(false);
-        keyboardButton.setTextSize(13);
-        keyboardButton.setElevation(dp(8));
-        keyboardButton.setBackground(rounded(Color.rgb(37, 31, 45), 24));
-        keyboardButton.setTextColor(FG);
-        keyboardButton.setVisibility(View.GONE);
-        keyboardButton.setOnClickListener(v -> desktopView.evaluateJavascript(
-                "(function(){var b=document.getElementById('noVNC_keyboard_button');" +
-                "if(b){b.click();return 'toolbar';}" +
-                "var e=document.querySelector('textarea,input,[contenteditable=true]');" +
-                "if(e){e.focus();return 'focused';}return 'no-keyboard-target';})()", null));
-        FrameLayout.LayoutParams keyboardLp = new FrameLayout.LayoutParams(
-                dp(132), dp(48), Gravity.BOTTOM | Gravity.END);
-        keyboardLp.setMargins(dp(12), dp(12), dp(16), dp(20));
-        root.addView(keyboardButton, keyboardLp);
         setContentView(root);
     }
 
@@ -275,9 +237,10 @@ public final class DesktopActivity extends Activity {
 
     private void startDesktopSession() {
         if (desktopProcess != null && desktopProcess.isAlive()) {
-            worker.execute(this::waitForDesktopBridge);
+            worker.execute(this::waitForNativeDesktop);
             return;
         }
+        desktopReady = false;
         runOnUiThread(() -> {
             bootPanel.setVisibility(View.VISIBLE);
             installButton.setVisibility(View.GONE);
@@ -291,14 +254,25 @@ public final class DesktopActivity extends Activity {
                 installRootfsIfNeeded();
                 updateBootProgress("Step 2/3: Configuring the desktop…");
                 configureDns();
-                copyAssetToRootfs("ubuntu-desktop-start.sh", "tmp/ubuntu-desktop-start.sh");
-                updateBootProgress("Step 3/3: Starting XFCE and connecting the display…");
-                Process p = launchScript("tmp/ubuntu-desktop-start.sh");
+                copyAssetToRootfs("ubuntu-desktop-start.sh", "root/ubuntu-desktop-start.sh");
+                updateBootProgress("Step 3/4: Starting native high-resolution X11 renderer…");
+                Process nativeServer = launchNativeX11Server();
+                nativeX11Process = nativeServer;
+                Thread nativeReader = new Thread(() -> readLog(nativeServer), "ubuntu-native-x11-log");
+                nativeReader.setDaemon(true);
+                nativeReader.start();
+                if (!waitForNativeProcessStart(nativeServer)) {
+                    throw new IllegalStateException("Native X11 server exited during startup. Check the diagnostic log.");
+                }
+                updateBootProgress("Step 4/4: Opening native display and starting XFCE…");
+                runOnUiThread(this::openNativeX11Activity);
+                Thread.sleep(1200);
+                Process p = launchScript("root/ubuntu-desktop-start.sh");
                 desktopProcess = p;
                 Thread reader = new Thread(() -> readLog(p), "ubuntu-desktop-log");
                 reader.setDaemon(true);
                 reader.start();
-                waitForDesktopBridge();
+                waitForNativeDesktop();
             } catch (Exception e) {
                 appendLog("DESKTOP START FAILED: " + e.getMessage());
                 runOnUiThread(() -> {
@@ -329,6 +303,7 @@ public final class DesktopActivity extends Activity {
         String[] rest = {
             "-r", rootfs.getAbsolutePath(), "-w", "/root", "-0",
             "-b", "/dev", "-b", "/proc", "-b", "/sys",
+            "-b", x11Tmp.getAbsolutePath() + ":/tmp",
             "/usr/bin/env", "-i",
             "HOME=/root", "TMPDIR=/tmp", "TEMP=/tmp", "TMP=/tmp",
             "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
@@ -347,48 +322,100 @@ public final class DesktopActivity extends Activity {
         return pb.start();
     }
 
-    private void waitForDesktopBridge() {
+    private Process launchNativeX11Server() throws Exception {
+        File x11Library = new File(getApplicationInfo().nativeLibraryDir, "libXlorie.so");
+        if (!x11Library.isFile()) throw new IllegalStateException("Native X11 library libXlorie.so is missing from the APK.");
+        List<String> command = new ArrayList<>();
+        command.add("/system/bin/app_process");
+        command.add("/");
+        command.add("--nice-name=ubuntu-lite-x11");
+        command.add("com.termux.x11.CmdEntryPoint");
+        command.add(":0");
+        command.add("-legacy-drawing");
+        command.add("-dpi");
+        command.add("180");
+        command.add("-ac");
+        ProcessBuilder pb = new ProcessBuilder(command).redirectErrorStream(true);
+        pb.environment().put("CLASSPATH", getApplicationInfo().sourceDir);
+        pb.environment().put("UBUNTU_LITE_NATIVE_LIBRARY_DIR", getApplicationInfo().nativeLibraryDir);
+        pb.environment().put("LD_LIBRARY_PATH", getApplicationInfo().nativeLibraryDir);
+        pb.environment().put("TMPDIR", x11Tmp.getAbsolutePath());
+        pb.environment().put("HOME", getFilesDir().getAbsolutePath());
+        return pb.start();
+    }
+
+    private boolean waitForNativeProcessStart(Process process) throws InterruptedException {
+        for (int i = 0; i < 12; i++) {
+            if (!process.isAlive()) return false;
+            Thread.sleep(250);
+        }
+        return process.isAlive();
+    }
+
+    private void openNativeX11Activity() {
+        try {
+            Intent intent = new Intent();
+            intent.setClassName(getPackageName(), "com.termux.x11.MainActivity");
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
+        } catch (Exception e) {
+            appendLog("Could not open native X11 renderer: " + e.getMessage());
+        }
+    }
+
+    private void waitForNativeDesktop() {
         long deadline = System.currentTimeMillis() + 120000L;
         long nextProgressUpdate = 0L;
         while (!shuttingDown && System.currentTimeMillis() < deadline) {
-            long elapsedSeconds = (120000L - Math.max(0L, deadline - System.currentTimeMillis())) / 1000L;
-            if (System.currentTimeMillis() >= nextProgressUpdate) {
-                updateBootProgress("Step 3/3: Waiting for XFCE display… " + elapsedSeconds + " seconds");
-                nextProgressUpdate = System.currentTimeMillis() + 5000L;
+            if (desktopReady) {
+                runOnUiThread(() -> { bootPanel.setVisibility(View.GONE); bootProgress.setVisibility(View.GONE); });
+                appendLog("Native X11 desktop ready; no VNC/noVNC bridge is used.");
+                return;
             }
             Process p = desktopProcess;
             if (p == null || !p.isAlive()) {
-                appendLog("Desktop process exited before the embedded display became ready.");
-                runOnUiThread(() -> {
-                    bootTitle.setText("Ubuntu desktop failed to start");
-                    bootStatus.setText("The desktop process stopped before the display was ready. Diagnostic output is shown below.");
-                    bootProgress.setVisibility(View.GONE);
-                    logScroll.setVisibility(View.VISIBLE);
-                    installButton.setVisibility(View.GONE);
-                    retryButton.setText("Restart Ubuntu Desktop");
-                    retryButton.setVisibility(View.VISIBLE);
-                });
+                appendLog("XFCE/PRoot exited before native desktop startup completed.");
+                showNativeStartupError("Ubuntu desktop failed to start", "XFCE exited before the native display was ready. Diagnostic output is shown below.");
+                closeNativeDisplayActivity();
                 return;
             }
-            try (Socket socket = new Socket()) {
-                socket.connect(new InetSocketAddress("127.0.0.1", 6080), 700);
-                runOnUiThread(() -> {
-                    desktopView.loadUrl("http://127.0.0.1:6080/vnc.html?autoconnect=1&resize=scale&reconnect=1&reconnect_delay=1000");
-                    bootPanel.setVisibility(View.GONE);
-                    if (keyboardButton != null) keyboardButton.setVisibility(View.VISIBLE);
-                });
+            Process x = nativeX11Process;
+            if (x == null || !x.isAlive()) {
+                appendLog("Native X11 server exited before the desktop became ready.");
+                showNativeStartupError("Native display failed", "The Android X11 renderer stopped. Diagnostic output is shown below.");
                 return;
-            } catch (Exception ignored) {}
-            try { Thread.sleep(700); }
-            catch (InterruptedException e) { Thread.currentThread().interrupt(); return; }
+            }
+            if (System.currentTimeMillis() >= nextProgressUpdate) {
+                long seconds = (System.currentTimeMillis() - (deadline - 120000L)) / 1000L;
+                updateBootProgress("Starting native Linux desktop… " + seconds + " seconds");
+                nextProgressUpdate = System.currentTimeMillis() + 5000L;
+            }
+            try { Thread.sleep(500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); return; }
         }
+        if (!shuttingDown && !desktopReady) {
+            showNativeStartupError("Native display timed out", "XFCE did not report ready within 120 seconds. Diagnostic output is shown below.");
+            closeNativeDisplayActivity();
+        }
+    }
+
+    private void showNativeStartupError(String title, String message) {
         runOnUiThread(() -> {
-            bootTitle.setText("Ubuntu display timed out");
-            bootStatus.setText("No desktop display after 120 seconds. Diagnostic output is shown below.");
+            bootPanel.setVisibility(View.VISIBLE);
+            bootTitle.setText(title);
+            bootStatus.setText(message);
             bootProgress.setVisibility(View.GONE);
             logScroll.setVisibility(View.VISIBLE);
+            installButton.setVisibility(View.GONE);
+            retryButton.setText("Restart Ubuntu Desktop");
             retryButton.setVisibility(View.VISIBLE);
+            try { startActivity(new Intent(this, DesktopActivity.class).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)); }
+            catch (Exception ignored) {}
         });
+    }
+
+    private void closeNativeDisplayActivity() {
+        try { sendBroadcast(new Intent("com.termux.x11.ACTION_STOP").setPackage(getPackageName())); }
+        catch (Exception ignored) {}
     }
 
     private void copyAssetToRootfs(String asset, String relativePath) throws Exception {
@@ -505,7 +532,10 @@ public final class DesktopActivity extends Activity {
     private void readLog(Process p) {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
             String line;
-            while ((line = reader.readLine()) != null) appendLog(line);
+            while ((line = reader.readLine()) != null) {
+                if ("UBUNTU_DESKTOP_DISPLAY_READY".equals(line.trim())) desktopReady = true;
+                appendLog(line);
+            }
         } catch (Exception e) {
             appendLog("Log reader: " + e.getMessage());
         }
@@ -534,9 +564,11 @@ public final class DesktopActivity extends Activity {
     private void stopDesktop() {
         shuttingDown = true;
         try { if (desktopProcess != null) desktopProcess.destroy(); } catch (Exception ignored) {}
+        try { if (nativeX11Process != null) nativeX11Process.destroy(); } catch (Exception ignored) {}
         desktopProcess = null;
-        desktopView.loadUrl("about:blank");
-        if (keyboardButton != null) keyboardButton.setVisibility(View.GONE);
+        nativeX11Process = null;
+        desktopReady = false;
+        closeNativeDisplayActivity();
         showInstallScreen();
         shuttingDown = false;
     }
@@ -557,6 +589,7 @@ public final class DesktopActivity extends Activity {
     @Override protected void onDestroy() {
         shuttingDown = true;
         try { if (desktopProcess != null) desktopProcess.destroy(); } catch (Exception ignored) {}
+        try { if (nativeX11Process != null) nativeX11Process.destroy(); } catch (Exception ignored) {}
         if (desktopView != null) desktopView.destroy();
         worker.shutdownNow();
         super.onDestroy();
