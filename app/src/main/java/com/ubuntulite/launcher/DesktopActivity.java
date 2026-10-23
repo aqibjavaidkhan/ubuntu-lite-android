@@ -275,11 +275,18 @@ public final class DesktopActivity extends Activity {
                 waitForNativeDesktop();
             } catch (Exception e) {
                 appendLog("DESKTOP START FAILED: " + e.getMessage());
+                try { if (desktopProcess != null) desktopProcess.destroy(); } catch (Exception ignored) {}
+                try { if (nativeX11Process != null) nativeX11Process.destroy(); } catch (Exception ignored) {}
+                desktopProcess = null;
+                nativeX11Process = null;
+                desktopReady = false;
+                closeNativeDisplayActivity();
                 runOnUiThread(() -> {
                     bootTitle.setText("Ubuntu desktop did not start");
                     bootStatus.setText("Startup error: " + (e.getMessage() == null ? "Unknown error" : e.getMessage()) + "\nSee diagnostic details below, then retry.");
                     bootProgress.setVisibility(View.GONE);
                     logScroll.setVisibility(View.VISIBLE);
+                    retryButton.setText("Restart Ubuntu Desktop");
                     retryButton.setVisibility(View.VISIBLE);
                 });
             }
