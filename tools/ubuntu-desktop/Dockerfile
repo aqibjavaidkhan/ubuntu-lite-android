@@ -38,12 +38,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       fonts-dejavu-core fonts-noto-core fonts-noto-color-emoji fonts-liberation2 \
       xdg-utils desktop-file-utils gvfs gvfs-backends \
       x11-xserver-utils x11-utils xfonts-base locales sudo \
-      git python3 python3-venv python3-pip build-essential htop nano zip unzip file \
+      git python3 python3-venv python3-pip build-essential htop nano zip unzip file passwd \
       adwaita-icon-theme hicolor-icon-theme gsettings-desktop-schemas librsvg2-common \
       psmisc procps iproute2 iputils-ping net-tools \
     && locale-gen en_US.UTF-8 \
     && mkdir -p /run /tmp /var/tmp /root/.config/xfce4/xfconf/xfce-perchannel-xml /usr/local/bin \
     && chmod 1777 /tmp /var/tmp
+
+# Firefox refuses normal browsing as guest uid 0. Keep package administration in
+# the root PRoot session but launch Firefox under an unprivileged guest account.
+RUN useradd --create-home --shell /bin/bash ubuntu && \
+    cat > /usr/local/bin/ubuntu-firefox <<'SCRIPT'
+#!/bin/sh
+export HOME=/home/ubuntu
+export USER=ubuntu
+export LOGNAME=ubuntu
+unset DBUS_SESSION_BUS_ADDRESS
+cd /home/ubuntu || exit 1
+exec su -s /bin/bash ubuntu -c 'export HOME=/home/ubuntu USER=ubuntu LOGNAME=ubuntu; cd /home/ubuntu; exec /usr/bin/firefox "$@"' ubuntu-firefox "$@"
+SCRIPT
+RUN chmod 755 /usr/local/bin/ubuntu-firefox
 
 RUN mkdir -p /usr/local/share/applications /usr/share/applications \
       /usr/share/backgrounds/ubuntu-lite \
@@ -177,7 +191,7 @@ RUN cat > /usr/share/applications/ubuntu-browser.desktop <<'DESKTOP'
 Version=1.0
 Type=Application
 Name=Firefox Browser
-Exec=firefox
+Exec=ubuntu-firefox
 Icon=firefox
 Terminal=false
 Categories=Network;WebBrowser;
