@@ -157,7 +157,7 @@ jobs:
           mkdir -p /tmp/ubuntu-apk-parts
           split -b 250M -d --additional-suffix=.part "$APK" /tmp/ubuntu-apk-parts/ubuntu-desktop-
           part_count="$(find /tmp/ubuntu-apk-parts -maxdepth 1 -name 'ubuntu-desktop-*.part' | wc -l)"
-          test "$part_count" -ge 2
+          # Join-and-release currently expects exactly three parts; fail loudly if APK size changes.\n          test "$part_count" -eq 3
           (cd /tmp/ubuntu-apk-parts && sha256sum ubuntu-desktop-*.part > SHA256SUMS.parts)
           sha256sum "$APK" | awk '{print $1 "  Ubuntu-Desktop-Android11plus.apk"}' > /tmp/ubuntu-apk-parts/Ubuntu-Desktop-Android11plus.apk.sha256
           echo "Split installable APK into $part_count downloadable parts."
